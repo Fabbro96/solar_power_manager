@@ -38,6 +38,8 @@ dependencies:
   fl_chart: ^0.70.0
   html: ^0.15.5
   http: ^1.2.2
+  path_provider: ^2.1.5
+  logger: ^2.5.0
 
 dev_dependencies:
   flutter_test:

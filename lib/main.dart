@@ -6,6 +6,8 @@ import 'dart:convert';
 import 'dart:async';
 import 'package:intl/intl.dart';
 import 'package:flutter/services.dart';
+import 'dart:io';
+import 'package:path_provider/path_provider.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -24,6 +26,9 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       home: EnergyMonitor(),
+      routes: {
+        '/daily': (context) => DailyDataScreen(),
+      },
     );
   }
 }
@@ -48,6 +53,7 @@ class _EnergyMonitorState extends State<EnergyMonitor> {
   Timer? _fetchDataTimer;
   Timer? _updateDataTimer;
   Timer? _updateGraphTimer;
+  Timer? _saveDataTimer;
   double? latestPowerValue;
   String appBarTitle = "Solar Monitor";
   String googleConnectionStatus = "Checking..."; // Stato connessione a Google
@@ -67,6 +73,9 @@ class _EnergyMonitorState extends State<EnergyMonitor> {
         _updateChartData(latestPowerValue!);
       }
     });
+    _saveDataTimer = Timer.periodic(Duration(minutes: 5), (timer) {
+      _saveDataToCsv();
+    });
   }
 
   @override
@@ -74,6 +83,7 @@ class _EnergyMonitorState extends State<EnergyMonitor> {
     _fetchDataTimer?.cancel();
     _updateDataTimer?.cancel();
     _updateGraphTimer?.cancel();
+    _saveDataTimer?.cancel();
     super.dispose();
   }
 
@@ -181,6 +191,41 @@ class _EnergyMonitorState extends State<EnergyMonitor> {
     }
   }
 
+  // Funzione per salvare i dati in un file CSV, gestendo l'append
+  Future<void> _saveDataToCsv() async {
+    final directory = await getApplicationDocumentsDirectory();
+    final filePath = '${directory.path}/solar_data.csv';
+    final file = File(filePath);
+
+    final now = DateTime.now();
+    final formattedDate = DateFormat('dd/MM/yyyy HH:mm:ss').format(now);
+    final power = latestPowerValue != null ? cleanValue(powerNow) : "N/A";
+    final energy = todaysEnergy;
+
+    // Controlla se il file esiste e se è vuoto, se sì, aggiungi l'intestazione
+    String header = "";
+    if (!file.existsSync() || file.lengthSync() == 0) {
+      header = "Date and Time,Solar Power (W),Daily Energy (kWh)\n";
+    }
+
+    // Crea la riga CSV manualmente (con la formattazione di base)
+    String row = '$formattedDate,$power,$energy\n';
+
+    try {
+      if (!file.existsSync()) {
+        file.createSync(recursive: true);
+      }
+      // Scrivi l'intestazione (se presente) e la riga nel file in modalità append
+      await file.writeAsString(header + row, mode: FileMode.append);
+    } on FileSystemException catch (e) {
+      // Gestisci specificamente gli errori di accesso al file system
+      print("Errore di I/O durante il salvataggio del file CSV: $e");
+    } catch (e) {
+      print("Errore durante il salvataggio del file CSV: $e");
+      // Gestisci altri errori generici
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -189,345 +234,176 @@ class _EnergyMonitorState extends State<EnergyMonitor> {
         backgroundColor: Colors.black,
         elevation: 0,
         title: Text(
-          appBarTitle, // Usa la variabile appBarTitle per il titolo
+          appBarTitle,
           style: TextStyle(
             color: Color.fromRGBO(100, 200, 255, 1),
             fontSize: 20,
             fontWeight: FontWeight.w300,
           ),
         ),
+        actions: <Widget>[
+          Padding(
+            padding: EdgeInsets.only(right: 20.0),
+            child: ElevatedButton(
+              onPressed: () {
+                Navigator.pushNamed(context, '/daily');
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.transparent,
+                shadowColor: Colors.transparent,
+              ),
+              child: Text('View Daily Data',
+                  style: TextStyle(color: Colors.white)),
+            ),
+          ),
+        ],
       ),
       body: LayoutBuilder(
         builder: (BuildContext context, BoxConstraints constraints) {
-          if (constraints.maxWidth > constraints.maxHeight) {
-            // Layout orizzontale
-            return Padding(
-              padding: const EdgeInsets.all(20.0),
-              child: Row(
-                children: [
-                  Expanded(
-                    flex: 2,
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 20),
-                          child: Text(
-                            'Last update: $lastUpdate',
-                            style: TextStyle(
-                              color: Color.fromRGBO(180, 180, 255, 1),
-                              fontSize: 14,
-                              fontWeight: FontWeight.w300,
-                            ),
+          return Padding(
+            padding: const EdgeInsets.all(20.0),
+            child: Row(
+              children: [
+                Expanded(
+                  flex: 2,
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 20),
+                        child: Text(
+                          'Last update: $lastUpdate',
+                          style: TextStyle(
+                            color: Color.fromRGBO(180, 180, 255, 1),
+                            fontSize: 14,
+                            fontWeight: FontWeight.w300,
                           ),
                         ),
-                        //GRAFICO
-                        Container(
-                          height: constraints.maxHeight * 0.6,
-                          padding: EdgeInsets.only(right: 20, top: 10),
-                          child: LineChart(
-                            LineChartData(
-                              backgroundColor: Colors.black,
-                              gridData: FlGridData(
-                                show: true,
-                                drawVerticalLine: true,
-                                drawHorizontalLine: true,
-                                verticalInterval: (powerData.isNotEmpty &&
-                                        powerData.length > 1 &&
-                                        powerData.last.x - powerData.first.x !=
-                                            0)
-                                    ? (powerData.last.x - powerData.first.x) / 6
-                                    : 10,
-                                horizontalInterval:
-                                    _getYAxisInterval(powerData),
-                                getDrawingHorizontalLine: (value) {
-                                  return FlLine(
-                                    color: Color.fromRGBO(100, 150, 200, 0.5),
-                                    strokeWidth: 1,
-                                    dashArray: [5, 5],
-                                  );
-                                },
-                                getDrawingVerticalLine: (value) {
-                                  return FlLine(
-                                    color: Color.fromRGBO(100, 150, 200, 0.5),
-                                    strokeWidth: 1,
-                                    dashArray: [5, 5],
-                                  );
-                                },
-                              ),
-                              titlesData: FlTitlesData(
-                                bottomTitles: AxisTitles(
-                                  sideTitles: SideTitles(
-                                    showTitles: true,
-                                    reservedSize: 28,
-                                    interval: (powerData.isNotEmpty &&
-                                            powerData.length > 1 &&
-                                            powerData.last.x -
-                                                    powerData.first.x !=
-                                                0)
-                                        ? (powerData.last.x -
-                                                powerData.first.x) /
-                                            6
-                                        : 10,
-                                    getTitlesWidget: (value, meta) {
-                                      if (powerData.isNotEmpty) {
-                                        // Usa i minuti solo se i dati coprono meno di un'ora, altrimenti usa le ore
-                                        if (powerData.last.x -
-                                                powerData.first.x <
-                                            3600 / 5) {
-                                          // Assumendo che un xValue rappresenti 5 secondi
-                                          final dateTime = DateTime.now()
-                                              .subtract(Duration(
-                                                  seconds:
-                                                      (powerData.last.x - value)
-                                                              .toInt() *
-                                                          5));
-                                          return SideTitleWidget(
-                                            axisSide: meta.axisSide,
-                                            child: Text(
-                                              DateFormat('mm').format(dateTime),
-                                              style: TextStyle(
-                                                color: Colors.white60,
-                                                fontSize: 10,
-                                              ),
-                                            ),
-                                          );
-                                        } else {
-                                          final dateTime = DateTime.now()
-                                              .subtract(Duration(
-                                                  seconds:
-                                                      (powerData.last.x - value)
-                                                              .toInt() *
-                                                          5));
-                                          return SideTitleWidget(
-                                            axisSide: meta.axisSide,
-                                            child: Text(
-                                              DateFormat('HH:mm')
-                                                  .format(dateTime),
-                                              style: TextStyle(
-                                                color: Colors.white60,
-                                                fontSize: 10,
-                                              ),
-                                            ),
-                                          );
-                                        }
-                                      } else {
-                                        return SideTitleWidget(
-                                          axisSide: meta.axisSide,
-                                          child: Text(""),
-                                        );
-                                      }
-                                    },
-                                  ),
-                                ),
-                                leftTitles: AxisTitles(
-                                  sideTitles: SideTitles(
-                                    showTitles: true,
-                                    interval: _getYAxisInterval(powerData),
-                                    reservedSize: 40,
-                                    getTitlesWidget: (value, meta) {
-                                      if (powerData.isNotEmpty) {
-                                        return Text(
-                                          '${value.toInt()}W',
+                      ),
+                      Container(
+                        height: constraints.maxHeight * 0.6,
+                        padding: EdgeInsets.only(right: 20, top: 10),
+                        child: LineChart(
+                          LineChartData(
+                            backgroundColor: Colors.black,
+                            gridData: FlGridData(
+                              show: true,
+                              drawVerticalLine: true,
+                              drawHorizontalLine: true,
+                              verticalInterval: (powerData.isNotEmpty &&
+                                      powerData.length > 1 &&
+                                      powerData.last.x - powerData.first.x != 0)
+                                  ? (powerData.last.x - powerData.first.x) / 6
+                                  : 10,
+                              horizontalInterval: _getYAxisInterval(powerData),
+                              getDrawingHorizontalLine: (value) {
+                                return FlLine(
+                                  color: Color.fromRGBO(100, 150, 200, 0.5),
+                                  strokeWidth: 1,
+                                  dashArray: [5, 5],
+                                );
+                              },
+                              getDrawingVerticalLine: (value) {
+                                return FlLine(
+                                  color: Color.fromRGBO(100, 150, 200, 0.5),
+                                  strokeWidth: 1,
+                                  dashArray: [5, 5],
+                                );
+                              },
+                            ),
+                            titlesData: FlTitlesData(
+                              bottomTitles: AxisTitles(
+                                sideTitles: SideTitles(
+                                  showTitles: true,
+                                  reservedSize: 28,
+                                  interval: (powerData.isNotEmpty &&
+                                          powerData.length > 1 &&
+                                          powerData.last.x -
+                                                  powerData.first.x !=
+                                              0)
+                                      ? (powerData.last.x - powerData.first.x) /
+                                          6
+                                      : 10,
+                                  getTitlesWidget: (value, meta) {
+                                    if (powerData.isNotEmpty) {
+                                      final dateTime = DateTime.now().subtract(
+                                          Duration(
+                                              seconds:
+                                                  (powerData.last.x - value)
+                                                          .toInt() *
+                                                      5));
+                                      return SideTitleWidget(
+                                        axisSide: meta.axisSide,
+                                        child: Text(
+                                          DateFormat('HH:mm').format(dateTime),
                                           style: TextStyle(
                                             color: Colors.white60,
-                                            fontSize: 13,
+                                            fontSize: 10,
                                           ),
-                                        );
-                                      } else {
-                                        return Text("");
-                                      }
-                                    },
-                                  ),
-                                ),
-                                topTitles: AxisTitles(
-                                  sideTitles: SideTitles(showTitles: false),
-                                ),
-                                rightTitles: AxisTitles(
-                                  sideTitles: SideTitles(showTitles: false),
+                                        ),
+                                      );
+                                    } else {
+                                      return SideTitleWidget(
+                                        axisSide: meta.axisSide,
+                                        child: Text(""),
+                                      );
+                                    }
+                                  },
                                 ),
                               ),
-                              borderData: FlBorderData(
-                                show: true,
-                                border: Border.all(
-                                  color: Colors.white12,
-                                  width: 1,
+                              leftTitles: AxisTitles(
+                                sideTitles: SideTitles(
+                                  showTitles: true,
+                                  interval: _getYAxisInterval(powerData),
+                                  reservedSize: 40,
+                                  getTitlesWidget: (value, meta) {
+                                    if (powerData.isNotEmpty) {
+                                      return Text(
+                                        '${value.toInt()}W',
+                                        style: TextStyle(
+                                          color: Colors.white60,
+                                          fontSize: 13,
+                                        ),
+                                      );
+                                    } else {
+                                      return Text("");
+                                    }
+                                  },
                                 ),
                               ),
-                              lineBarsData: [
-                                LineChartBarData(
-                                  spots: powerData,
-                                  isCurved: true,
-                                  curveSmoothness: 0.4,
-                                  color: Color.fromRGBO(0, 255, 255, 1),
-                                  barWidth: 3,
-                                  dotData: FlDotData(show: false),
-                                  belowBarData: BarAreaData(
-                                    show: true,
-                                    color: Color.fromRGBO(0, 255, 255, 0.2),
-                                    gradient: LinearGradient(
-                                      colors: [
-                                        Color.fromRGBO(0, 255, 255, 0.7),
-                                        Color.fromRGBO(0, 255, 255, 0.01),
-                                      ],
-                                      begin: Alignment.topCenter,
-                                      end: Alignment.bottomCenter,
-                                    ),
-                                  ),
-                                ),
-                              ],
+                              topTitles: AxisTitles(
+                                sideTitles: SideTitles(showTitles: false),
+                              ),
+                              rightTitles: AxisTitles(
+                                sideTitles: SideTitles(showTitles: false),
+                              ),
                             ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  SizedBox(width: 20),
-                  Expanded(
-                    flex: 1,
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Container(
-                          padding: EdgeInsets.symmetric(vertical: 24),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Current Power',
-                                style: TextStyle(
-                                  color: Color.fromRGBO(150, 180, 255, 1),
-                                  fontSize: 14,
-                                ),
+                            borderData: FlBorderData(
+                              show: true,
+                              border: Border.all(
+                                color: Colors.white12,
+                                width: 1,
                               ),
-                              SizedBox(height: 8),
-                              Text(
-                                powerNow,
-                                style: TextStyle(
-                                  color: Color.fromRGBO(100, 200, 255, 1),
-                                  fontSize: 28,
-                                  fontWeight: FontWeight.w200,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        Container(
-                          padding: EdgeInsets.symmetric(vertical: 24),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Today',
-                                style: TextStyle(
-                                  color: Color.fromRGBO(150, 180, 255, 1),
-                                  fontSize: 14,
-                                ),
-                              ),
-                              SizedBox(height: 8),
-                              Text(
-                                todaysEnergy,
-                                style: TextStyle(
-                                  color: Color.fromRGBO(100, 200, 255, 1),
-                                  fontSize: 28,
-                                  fontWeight: FontWeight.w200,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        SizedBox(height: 40),
-                        Center(
-                          child: Column(
-                            children: [
-                              IconButton(
-                                icon: Icon(Icons.refresh,
-                                    color: Color.fromRGBO(150, 180, 255, 1)),
-                                onPressed: _fetchData,
-                              ),
-                              Text(
-                                'Auto-refresh every 10 minutes',
-                                style: TextStyle(
-                                  color: Colors.white24,
-                                  fontSize: 12,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            );
-          } else {
-            // Layout verticale
-            return Padding(
-              padding: const EdgeInsets.all(20.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 20),
-                    child: Text(
-                      'Last update: $lastUpdate',
-                      style: TextStyle(
-                        color: Color.fromRGBO(180, 180, 255, 1),
-                        fontSize: 14,
-                        fontWeight: FontWeight.w300,
-                      ),
-                    ),
-                  ),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Container(
-                          padding: EdgeInsets.symmetric(vertical: 24),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Current Power',
-                                style: TextStyle(
-                                  color: Color.fromRGBO(150, 180, 255, 1),
-                                  fontSize: 14,
-                                ),
-                              ),
-                              SizedBox(height: 8),
-                              Text(
-                                powerNow,
-                                style: TextStyle(
-                                  color: Color.fromRGBO(100, 200, 255, 1),
-                                  fontSize: 28,
-                                  fontWeight: FontWeight.w200,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      Expanded(
-                        child: Container(
-                          padding: EdgeInsets.symmetric(vertical: 24),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Today',
-                                style: TextStyle(
-                                  color: Color.fromRGBO(150, 180, 255, 1),
-                                  fontSize: 14,
-                                ),
-                              ),
-                              SizedBox(height: 8),
-                              Text(
-                                todaysEnergy,
-                                style: TextStyle(
-                                  color: Color.fromRGBO(100, 200, 255, 1),
-                                  fontSize: 28,
-                                  fontWeight: FontWeight.w200,
+                            ),
+                            lineBarsData: [
+                              LineChartBarData(
+                                spots: powerData,
+                                isCurved: true,
+                                curveSmoothness: 0.4,
+                                color: Color.fromRGBO(0, 255, 255, 1),
+                                barWidth: 3,
+                                dotData: FlDotData(show: false),
+                                belowBarData: BarAreaData(
+                                  show: true,
+                                  color: Color.fromRGBO(0, 255, 255, 0.2),
+                                  gradient: LinearGradient(
+                                    colors: [
+                                      Color.fromRGBO(0, 255, 255, 0.7),
+                                      Color.fromRGBO(0, 255, 255, 0.01),
+                                    ],
+                                    begin: Alignment.topCenter,
+                                    end: Alignment.bottomCenter,
+                                  ),
                                 ),
                               ),
                             ],
@@ -536,101 +412,231 @@ class _EnergyMonitorState extends State<EnergyMonitor> {
                       ),
                     ],
                   ),
-                  SizedBox(height: 20),
-                  Expanded(
-                    child: LineChart(
-                      LineChartData(
-                        gridData: FlGridData(
-                          show: true,
-                          drawVerticalLine: false,
-                          horizontalInterval: 100,
-                          verticalInterval: (powerData.isNotEmpty &&
-                                  powerData.length > 1 &&
-                                  powerData.last.x - powerData.first.x != 0)
-                              ? (powerData.last.x - powerData.first.x) / 6
-                              : 10,
-                          getDrawingHorizontalLine: (value) {
-                            return FlLine(
-                              color: Color.fromRGBO(100, 150, 200, 0.5),
-                              strokeWidth: 1,
-                            );
-                          },
-                        ),
-                        titlesData: FlTitlesData(
-                          bottomTitles: AxisTitles(
-                            sideTitles: SideTitles(showTitles: false),
-                          ),
-                          leftTitles: AxisTitles(
-                            sideTitles: SideTitles(
-                              showTitles: true,
-                              interval: 100,
-                              reservedSize: 40,
-                              getTitlesWidget: (value, meta) {
-                                return Text(
-                                  '${value.toInt()}W',
-                                  style: TextStyle(
-                                    color: Colors.white38,
-                                    fontSize: 12,
-                                  ),
-                                );
-                              },
+                ),
+                SizedBox(width: 20),
+                Expanded(
+                  flex: 1,
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        padding: EdgeInsets.symmetric(vertical: 24),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Current Power',
+                              style: TextStyle(
+                                color: Color.fromRGBO(150, 180, 255, 1),
+                                fontSize: 14,
+                              ),
                             ),
-                          ),
-                          topTitles: AxisTitles(
-                            sideTitles: SideTitles(showTitles: false),
-                          ),
-                          rightTitles: AxisTitles(
-                            sideTitles: SideTitles(showTitles: false),
-                          ),
-                        ),
-                        borderData: FlBorderData(show: false),
-                        lineBarsData: [
-                          LineChartBarData(
-                            spots: powerData,
-                            isCurved: true,
-                            color: Color.fromRGBO(0, 255, 255, 1),
-                            barWidth: 2,
-                            dotData: FlDotData(show: false),
-                            belowBarData: BarAreaData(
-                              show: true,
-                              color: Color.fromRGBO(0, 255, 255, 0.2),
+                            SizedBox(height: 8),
+                            Text(
+                              powerNow,
+                              style: TextStyle(
+                                color: Color.fromRGBO(100, 200, 255, 1),
+                                fontSize: 28,
+                                fontWeight: FontWeight.w200,
+                              ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
-                    ),
+                      Container(
+                        padding: EdgeInsets.symmetric(vertical: 24),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Today',
+                              style: TextStyle(
+                                color: Color.fromRGBO(150, 180, 255, 1),
+                                fontSize: 14,
+                              ),
+                            ),
+                            SizedBox(height: 8),
+                            Text(
+                              todaysEnergy,
+                              style: TextStyle(
+                                color: Color.fromRGBO(100, 200, 255, 1),
+                                fontSize: 28,
+                                fontWeight: FontWeight.w200,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      SizedBox(height: 40),
+                      Center(
+                        child: Column(
+                          children: [
+                            Text(
+                              googleConnectionStatus,
+                              style: TextStyle(
+                                color: Colors.white70,
+                                fontSize: 14,
+                              ),
+                            ),
+                            SizedBox(height: 10),
+                            TextButton(
+                              onPressed: _fetchData,
+                              child: Text(
+                                'Auto-refresh every 10 minutes',
+                                style: TextStyle(
+                                  color: Colors.white24,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
-                  Spacer(),
-                  Center(
-                    child: Column(
-                      children: [
-                        Text(
-                          googleConnectionStatus, // Mostra lo stato della connessione a Google
-                          style: TextStyle(
-                            color: Colors.white70,
-                            fontSize: 14,
-                          ),
-                        ),
-                        IconButton(
-                          icon: Icon(Icons.refresh,
-                              color: Color.fromRGBO(150, 180, 255, 1)),
-                          onPressed: _fetchData,
-                        ),
-                        Text(
-                          'Auto-refresh every 10 minutes',
-                          style: TextStyle(
-                            color: Colors.white24,
-                            fontSize: 12,
-                          ),
-                        ),
-                        SizedBox(height: 20),
-                      ],
-                    ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class DailyDataScreen extends StatefulWidget {
+  @override
+  _DailyDataScreenState createState() => _DailyDataScreenState();
+}
+
+class _DailyDataScreenState extends State<DailyDataScreen> {
+  Map<String, dynamic> dailyData = {};
+  String? selectedDay;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadDailyData();
+  }
+
+  Future<void> _loadDailyData() async {
+    final directory =
+        await getApplicationDocumentsDirectory(); // Usa path_provider qui
+    final filePath = '${directory.path}/solar_data.json';
+    final file = File(filePath);
+
+    if (file.existsSync()) {
+      String fileContent = await file.readAsString();
+      if (fileContent.isNotEmpty) {
+        try {
+          setState(() {
+            dailyData = jsonDecode(fileContent);
+          });
+        } catch (e) {
+          print("Errore durante la decodifica del file JSON: $e");
+        }
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        backgroundColor: Colors.black,
+        title: Text(
+          "Daily Data",
+          style: TextStyle(color: Color.fromRGBO(100, 200, 255, 1)),
+        ),
+        leading: IconButton(
+          icon: Icon(Icons.arrow_back, color: Color.fromRGBO(100, 200, 255, 1)),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+      ),
+      body: Column(
+        children: [
+          Expanded(
+            child: ListView.builder(
+              itemCount: dailyData.length,
+              itemBuilder: (context, index) {
+                String day = dailyData.keys.elementAt(index);
+                // Ottieni l'ultimo valore di 'energy' per questo giorno
+                var lastEntry = dailyData[day].last;
+                String energyValue = lastEntry['energy'] ?? 'N/A';
+
+                return ListTile(
+                  title: Text(
+                    day,
+                    style: TextStyle(color: Colors.white),
                   ),
-                ],
-              ),
-            );
-          }
+                  subtitle: Text(
+                    "Energy: $energyValue",
+                    style: TextStyle(color: Colors.grey),
+                  ),
+                  onTap: () {
+                    setState(() {
+                      selectedDay = day;
+                    });
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) =>
+                            DayDetailsScreen(dayData: dailyData[day], day: day),
+                      ),
+                    );
+                  },
+                );
+              },
+            ),
+          ),
+          if (selectedDay != null)
+            Expanded(
+              child: DayDetailsScreen(
+                  dayData: dailyData[selectedDay], day: selectedDay),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class DayDetailsScreen extends StatelessWidget {
+  final List<dynamic> dayData;
+  final String? day;
+
+  DayDetailsScreen({required this.dayData, this.day});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        backgroundColor: Colors.black,
+        title: Text(
+          day ?? 'Dettagli del giorno',
+          style: TextStyle(color: Color.fromRGBO(100, 200, 255, 1)),
+        ),
+        leading: IconButton(
+          icon: Icon(Icons.arrow_back, color: Color.fromRGBO(100, 200, 255, 1)),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+      ),
+      body: ListView.builder(
+        itemCount: dayData.length,
+        itemBuilder: (context, index) {
+          var entry = dayData[index];
+          return ListTile(
+            title: Text(
+              "Power: ${entry['power']}",
+              style: TextStyle(color: Colors.white),
+            ),
+            subtitle: Text(
+              "Time: ${entry['timestamp']}",
+              style: TextStyle(color: Colors.grey),
+            ),
+          );
         },
       ),
     );
