@@ -518,6 +518,8 @@ class _EnergyMonitorState extends State<EnergyMonitor> {
 }
 
 class DailyDataScreen extends StatefulWidget {
+  const DailyDataScreen({super.key});
+
   @override
   _DailyDataScreenState createState() => _DailyDataScreenState();
 }
@@ -633,7 +635,7 @@ class DayDetailsScreen extends StatelessWidget {
   final List<dynamic> dayData;
   final String? day;
 
-  DayDetailsScreen({required this.dayData, this.day});
+  const DayDetailsScreen({super.key, required this.dayData, this.day});
 
   @override
   Widget build(BuildContext context) {
