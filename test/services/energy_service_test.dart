@@ -1,0 +1,82 @@
+import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
+import 'package:solar_power_manager/services/energy_service.dart';
+
+void main() {
+  const dummyConfig = EnergyServiceConfig(
+    url: 'http://192.168.1.16/monitor.htm',
+    username: 'admin',
+    password: 'admin',
+  );
+
+  final dummyHtml = '''
+    <html>
+      <body>
+        <table>
+          <tr><td>Today's Energy:</td><td>15.5 kWh</td></tr>
+          <tr><td>Power Now:</td><td>2500 W</td></tr>
+        </table>
+      </body>
+    </html>
+  ''';
+
+  group('EnergyService', () {
+    test('fetchEnergyData parses HTML correctly on 200 response', () async {
+      final mockClient = MockClient((request) async {
+        expect(request.url.toString(), dummyConfig.url);
+        // Basic auth contains 'admin:admin' -> YWRtaW46YWRtaW4=
+        expect(request.headers['Authorization'], 'Basic YWRtaW46YWRtaW4=');
+        return http.Response(dummyHtml, 200);
+      });
+
+      final service = EnergyService(config: dummyConfig, client: mockClient);
+      final data = await service.fetchEnergyData();
+
+      expect(data.todaysEnergy, '15.5 kWh');
+      expect(data.powerNow, '2500 W');
+      expect(data.latestPowerValue, 2500.0);
+      expect(data.lastUpdate, isNotEmpty);
+    });
+
+    test('fetchEnergyData throws EnergyServiceException on non-200 response',
+        () async {
+      final mockClient = MockClient((request) async {
+        return http.Response('Unauthorized', 401);
+      });
+
+      final service = EnergyService(config: dummyConfig, client: mockClient);
+
+      expect(
+        () => service.fetchEnergyData(),
+        throwsA(isA<EnergyServiceException>().having(
+          (e) => e.statusCode,
+          'statusCode',
+          401,
+        )),
+      );
+    });
+
+    test('checkInternetConnectivity returns true on 200 response', () async {
+      final mockClient = MockClient((request) async {
+        return http.Response('OK', 200);
+      });
+
+      final service = EnergyService(config: dummyConfig, client: mockClient);
+      final isConnected = await service.checkInternetConnectivity();
+
+      expect(isConnected, isTrue);
+    });
+
+    test('checkInternetConnectivity returns false on error', () async {
+      final mockClient = MockClient((request) async {
+        throw Exception('Network error');
+      });
+
+      final service = EnergyService(config: dummyConfig, client: mockClient);
+      final isConnected = await service.checkInternetConnectivity();
+
+      expect(isConnected, isFalse);
+    });
+  });
+}
