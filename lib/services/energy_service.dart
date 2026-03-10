@@ -25,32 +25,40 @@ class EnergyService {
       : _client = client ?? http.Client();
 
   Future<EnergyData> fetchEnergyData() async {
-    final credentials = '${config.username}:${config.password}';
-    final encodedCredentials = base64Encode(utf8.encode(credentials));
+    try {
+      final credentials = '${config.username}:${config.password}';
+      final encodedCredentials = base64Encode(utf8.encode(credentials));
 
-    final response = await _client.get(
-      Uri.parse(config.url),
-      headers: {'Authorization': 'Basic $encodedCredentials'},
-    ).timeout(const Duration(seconds: 10));
+      final response = await _client.get(
+        Uri.parse(config.url),
+        headers: {'Authorization': 'Basic $encodedCredentials'},
+      ).timeout(const Duration(seconds: 10));
 
-    if (response.statusCode != 200) {
+      if (response.statusCode != 200) {
+        throw EnergyServiceException(
+          'HTTP ${response.statusCode}',
+          statusCode: response.statusCode,
+        );
+      }
+
+      final todaysEnergy = _extractValueRegex(response.body, "Today's Energy");
+      final powerNow = _extractValueRegex(response.body, 'Power Now');
+      final numericPower =
+          double.tryParse(powerNow.replaceAll(RegExp(r'[^0-9.]'), ''));
+
+      return EnergyData(
+        todaysEnergy: todaysEnergy,
+        powerNow: powerNow,
+        lastUpdate: DateFormat('dd/MM/yyyy HH:mm:ss').format(DateTime.now()),
+        latestPowerValue: numericPower,
+      );
+    } on EnergyServiceException {
+      rethrow;
+    } catch (e) {
       throw EnergyServiceException(
-        'HTTP ${response.statusCode}',
-        statusCode: response.statusCode,
+        'Failed to fetch energy data: ${e.toString()}',
       );
     }
-
-    final todaysEnergy = _extractValueRegex(response.body, "Today's Energy");
-    final powerNow = _extractValueRegex(response.body, 'Power Now');
-    final numericPower =
-        double.tryParse(powerNow.replaceAll(RegExp(r'[^0-9.]'), ''));
-
-    return EnergyData(
-      todaysEnergy: todaysEnergy,
-      powerNow: powerNow,
-      lastUpdate: DateFormat('dd/MM/yyyy HH:mm:ss').format(DateTime.now()),
-      latestPowerValue: numericPower,
-    );
   }
 
   Future<bool> checkInternetConnectivity() async {

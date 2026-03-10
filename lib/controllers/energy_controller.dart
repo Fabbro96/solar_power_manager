@@ -77,24 +77,37 @@ class EnergyController extends ChangeNotifier {
   }
 
   Future<void> _checkInternet() async {
-    final ok = await _service.checkInternetConnectivity();
-    updateState(_state.copyWith(
-      internetStatus: ok ? ConnectionStatus.connected : ConnectionStatus.error,
-    ));
+    try {
+      final ok = await _service.checkInternetConnectivity();
+      updateState(_state.copyWith(
+        internetStatus: ok ? ConnectionStatus.connected : ConnectionStatus.error,
+      ));
+    } catch (e) {
+      updateState(_state.copyWith(
+        internetStatus: ConnectionStatus.error,
+        errorDetail: 'Internet check failed: ${e.toString()}',
+      ));
+    }
   }
 
   void _pushChartPoint() {
-    final power = _state.energyData.latestPowerValue;
-    if (power == null) return;
+    try {
+      final power = _state.energyData.latestPowerValue;
+      if (power == null) return;
 
-    _powerHistory = List.of(_powerHistory)
-      ..add(FlSpot(_xTick.toDouble(), power));
+      _powerHistory = List.of(_powerHistory)
+        ..add(FlSpot(_xTick.toDouble(), power));
 
-    if (_powerHistory.length > _config.maxChartPoints) {
-      _powerHistory.removeAt(0);
+      if (_powerHistory.length > _config.maxChartPoints) {
+        _powerHistory.removeAt(0);
+      }
+
+      _xTick++;
+      updateState(_state.copyWith(powerHistory: _powerHistory));
+    } catch (e) {
+      updateState(_state.copyWith(
+        errorDetail: 'Chart point update failed: ${e.toString()}',
+      ));
     }
-
-    _xTick++;
-    updateState(_state.copyWith(powerHistory: _powerHistory));
   }
 }

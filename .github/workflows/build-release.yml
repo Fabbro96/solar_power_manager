@@ -30,9 +30,11 @@ jobs:
       - name: Build APK
         run: flutter build apk --release
 
-      - name: Upload APK to Release
-        uses: softprops/action-gh-release@v1
-        with:
-          files: build/app/outputs/apk/release/app-release.apk
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # Note: APK build is successful. Manual release upload required due to token permissions.
+      # Uncomment below if needed with proper token permissions configured.
+      # - name: Upload APK to Release
+      #   uses: softprops/action-gh-release@v1
+      #   with:
+      #     files: build/app/outputs/apk/release/app-release.apk
+      #   env:
+      #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
