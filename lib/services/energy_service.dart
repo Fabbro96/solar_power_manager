@@ -1,6 +1,5 @@
 import 'dart:convert';
 
-import 'package:html/parser.dart' show parse;
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 
@@ -41,9 +40,8 @@ class EnergyService {
       );
     }
 
-    final document = parse(response.body);
-    final todaysEnergy = _extractTableValue(document, "Today's Energy");
-    final powerNow = _extractTableValue(document, 'Power Now');
+    final todaysEnergy = _extractValueRegex(response.body, "Today's Energy");
+    final powerNow = _extractValueRegex(response.body, 'Power Now');
     final numericPower =
         double.tryParse(powerNow.replaceAll(RegExp(r'[^0-9.]'), ''));
 
@@ -66,12 +64,14 @@ class EnergyService {
     }
   }
 
-  String _extractTableValue(dynamic document, String keyword) {
-    final elements = document.getElementsByTagName('td');
-    for (var i = 0; i < elements.length - 1; i++) {
-      if (elements[i].text.trim() == '$keyword:') {
-        return elements[i + 1].text.trim();
-      }
+  String _extractValueRegex(String html, String keyword) {
+    // Looks for <td>Keyword:</td> then capturing the following <td>content</td>
+    final regex = RegExp('<td>\\s*$keyword:\\s*</td>\\s*<td>(.*?)</td>',
+        caseSensitive: false);
+    final match = regex.firstMatch(html);
+    if (match != null) {
+      final val = match.group(1) ?? 'N/A';
+      return val.trim();
     }
     return 'N/A';
   }

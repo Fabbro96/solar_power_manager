@@ -117,12 +117,14 @@ class _EnergyMonitorScreenState extends State<EnergyMonitorScreen> {
               child: EnergyInfoCard(
                 label: 'Current Power',
                 value: state.energyData.powerNow,
+                icon: Icons.bolt,
               ),
             ),
             Expanded(
               child: EnergyInfoCard(
                 label: 'Today',
                 value: state.energyData.todaysEnergy,
+                icon: Icons.calendar_today,
               ),
             ),
           ],
@@ -165,10 +167,12 @@ class _EnergyMonitorScreenState extends State<EnergyMonitorScreen> {
         EnergyInfoCard(
           label: 'Current Power',
           value: state.energyData.powerNow,
+          icon: Icons.bolt,
         ),
         EnergyInfoCard(
           label: 'Today',
           value: state.energyData.todaysEnergy,
+          icon: Icons.calendar_today,
         ),
         const SizedBox(height: 40),
         Center(child: _refreshButton()),
