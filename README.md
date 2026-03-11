@@ -54,8 +54,15 @@ GitHub Actions validates every push/PR on `master` and `main` with:
 - formatting verification
 - static analysis
 - test execution
+- APK build and upload as a workflow artifact on every `push`
 
 Workflow file: `.github/workflows/ci.yml`
+
+To download the APK after a push:
+
+1. Open the latest successful CI run in GitHub Actions.
+2. Open the `Artifacts` section.
+3. Download `app-release-apk-<commit-sha>`.
 
 ## Release Build
 
