@@ -71,18 +71,18 @@ class _EnergyMonitorScreenState extends State<EnergyMonitorScreen> {
     );
   }
 
-  String _getInternetLabel(MonitorState state) {
-    switch (state.internetStatus) {
+  String _monitorStatusLabel(MonitorState state) {
+    switch (state.inverterStatus) {
       case ConnectionStatus.connected:
-        return 'Internet: connected';
+        return 'Solar Monitor: connected';
       case ConnectionStatus.error:
-        return 'Internet: disconnected';
+        return 'Solar Monitor: disconnected';
       case ConnectionStatus.checking:
-        return 'Internet: checking...';
+        return 'Solar Monitor: checking...';
     }
   }
 
-  Color _internetColor(ConnectionStatus status) {
+  Color _monitorStatusColor(ConnectionStatus status) {
     switch (status) {
       case ConnectionStatus.connected:
         return const Color(0xFF66E4A8);
@@ -93,14 +93,14 @@ class _EnergyMonitorScreenState extends State<EnergyMonitorScreen> {
     }
   }
 
-  IconData _internetIcon(ConnectionStatus status) {
+  IconData _monitorStatusIcon(ConnectionStatus status) {
     switch (status) {
       case ConnectionStatus.connected:
-        return Icons.wifi;
+        return Icons.solar_power;
       case ConnectionStatus.error:
-        return Icons.wifi_off;
+        return Icons.solar_power_outlined;
       case ConnectionStatus.checking:
-        return Icons.network_check;
+        return Icons.settings_input_component;
     }
   }
 
@@ -395,7 +395,7 @@ class _EnergyMonitorScreenState extends State<EnergyMonitorScreen> {
   }
 
   Widget _statusAndRefreshRow(MonitorState state) {
-    final statusColor = _internetColor(state.internetStatus);
+    final statusColor = _monitorStatusColor(state.inverterStatus);
 
     return Container(
       width: double.infinity,
@@ -409,16 +409,35 @@ class _EnergyMonitorScreenState extends State<EnergyMonitorScreen> {
         mainAxisSize: MainAxisSize.max,
         children: [
           Icon(
-            _internetIcon(state.internetStatus),
+            _monitorStatusIcon(state.inverterStatus),
             size: 16,
             color: statusColor,
           ),
           const SizedBox(width: 8),
           Expanded(
-            child: Text(
-              _getInternetLabel(state),
-              style: const TextStyle(color: Colors.white70, fontSize: 12),
-              overflow: TextOverflow.ellipsis,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  _monitorStatusLabel(state),
+                  style: const TextStyle(
+                    color: Colors.white70,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+                Text(
+                  'Last update: ${state.energyData.lastUpdate}',
+                  style: const TextStyle(
+                    color: Colors.white54,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w500,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
             ),
           ),
           const SizedBox(width: 6),
