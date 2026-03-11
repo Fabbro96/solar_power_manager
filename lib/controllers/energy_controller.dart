@@ -25,6 +25,7 @@ class EnergyController extends ChangeNotifier {
   Timer? _fetchTimer;
   Timer? _chartTimer;
   double _lastViewportWidth = 0;
+  DateTime? _lastStoredSampleAt;
   int _rangeRequestId = 0;
   bool _hasFreshReading = false;
   int _samplesSincePrune = 0;
@@ -110,8 +111,10 @@ class EnergyController extends ChangeNotifier {
 
   void _restartChartTimer() {
     _chartTimer?.cancel();
+    // Keep this lightweight heartbeat frequent; actual point insertion is
+    // cadence-gated in _pushChartPoint to avoid missing samples.
     _chartTimer = Timer.periodic(
-      _chartCadenceForRange(_state.chartRange),
+      const Duration(minutes: 1),
       (_) => _pushChartPoint(),
     );
   }
@@ -165,6 +168,10 @@ class EnergyController extends ChangeNotifier {
         inverterStatus: ConnectionStatus.connected,
         errorDetail: null,
       ));
+
+      // Capture chart points on successful fetch so history starts immediately
+      // and does not depend on timer alignment.
+      _pushChartPoint();
     } on EnergyServiceException catch (e) {
       _hasFreshReading = false;
       updateState(_state.copyWith(
@@ -203,11 +210,19 @@ class EnergyController extends ChangeNotifier {
       final power = _state.energyData.latestPowerValue;
       if (power == null) return;
 
-      final sample = PowerSample(timestamp: DateTime.now(), watts: power);
+      final now = DateTime.now();
+      final cadence = _chartCadenceForRange(_state.chartRange);
+      if (_lastStoredSampleAt != null &&
+          now.difference(_lastStoredSampleAt!) < cadence) {
+        return;
+      }
+
+      final sample = PowerSample(timestamp: now, watts: power);
+      _lastStoredSampleAt = now;
       _hasFreshReading = false;
       unawaited(_persistSample(sample));
 
-      final cutoff = DateTime.now().subtract(_state.chartRange.duration);
+      final cutoff = now.subtract(_state.chartRange.duration);
       if (sample.timestamp.isBefore(cutoff)) {
         return;
       }
@@ -235,6 +250,7 @@ class EnergyController extends ChangeNotifier {
       if (requestId != _rangeRequestId) return;
 
       _powerHistory = _downsample(loaded, maxPoints: _maxVisiblePoints);
+      _lastStoredSampleAt = loaded.isNotEmpty ? loaded.last.timestamp : null;
       updateState(_state.copyWith(
         chartRange: range,
         chartLoading: false,

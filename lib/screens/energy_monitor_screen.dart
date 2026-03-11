@@ -49,25 +49,10 @@ class _EnergyMonitorScreenState extends State<EnergyMonitorScreen> {
   }
 
   Widget _buildAppBarTitle(MonitorState state) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(
-          _getAppBarTitle(state),
-          style: AppTextStyles.appBarTitle.copyWith(fontSize: 18),
-          overflow: TextOverflow.ellipsis,
-        ),
-        Text(
-          'Last update: ${state.energyData.lastUpdate}',
-          style: const TextStyle(
-            color: Colors.white54,
-            fontSize: 11,
-            fontWeight: FontWeight.w500,
-          ),
-          overflow: TextOverflow.ellipsis,
-        ),
-      ],
+    return Text(
+      _getAppBarTitle(state),
+      style: AppTextStyles.appBarTitle.copyWith(fontSize: 18),
+      overflow: TextOverflow.ellipsis,
     );
   }
 
