@@ -39,6 +39,15 @@ jobs:
       - name: Build APK
         run: flutter build apk --release --split-per-abi --no-pub
 
+      - name: Verify build output
+        run: |
+          set -euo pipefail
+          echo "=== Android build directory structure ==="
+          find build/app -type f -name '*.apk' 2>/dev/null | sort || echo "No APKs found"
+          echo ""
+          echo "=== Full outputs directory ==="
+          find build/app/outputs -type f 2>/dev/null | sort | head -20 || echo "No outputs directory"
+
       - name: Publish versioned APK on tag release
         env:
           GH_TOKEN: ${{ github.token }}
