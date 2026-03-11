@@ -37,7 +37,7 @@ jobs:
         run: flutter pub get
 
       - name: Build APK
-        run: flutter build apk --release --split-per-abi --no-pub
+        run: flutter build apk --release --no-pub
 
       - name: Verify build output
         run: |
@@ -57,7 +57,7 @@ jobs:
 
           TAG_NAME="${GITHUB_REF_NAME}"
           APP_VERSION="$(grep '^version:' pubspec.yaml | awk '{print $2}')"
-          APK_PATH="$(find build/app/outputs -type f -name '*arm64-v8a-release.apk' | head -n 1 || true)"
+          APK_PATH="$(find build/app/outputs -type f -name 'app-release.apk' | head -n 1 || true)"
           if [[ -z "$APK_PATH" ]]; then
             APK_PATH="$(find build/app/outputs -type f -name '*.apk' | head -n 1 || true)"
           fi
