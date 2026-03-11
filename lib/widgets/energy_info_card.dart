@@ -17,8 +17,8 @@ class EnergyInfoCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-      padding: const EdgeInsets.all(16),
+      margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 4),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: AppColors.background,
         borderRadius: BorderRadius.circular(16),
@@ -38,7 +38,7 @@ class EnergyInfoCard extends StatelessWidget {
           Row(
             children: [
               if (icon != null) ...[
-                Icon(icon, size: 18, color: AppColors.label),
+                Icon(icon, size: 18, color: Colors.white70),
                 const SizedBox(width: 8),
               ],
               Expanded(
@@ -50,7 +50,7 @@ class EnergyInfoCard extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 8),
           Text(
             value,
             style: AppTextStyles.value,

@@ -82,6 +82,28 @@ class _EnergyMonitorScreenState extends State<EnergyMonitorScreen> {
     }
   }
 
+  Color _internetColor(ConnectionStatus status) {
+    switch (status) {
+      case ConnectionStatus.connected:
+        return const Color(0xFF66E4A8);
+      case ConnectionStatus.error:
+        return const Color(0xFFFF8A8A);
+      case ConnectionStatus.checking:
+        return Colors.amberAccent;
+    }
+  }
+
+  IconData _internetIcon(ConnectionStatus status) {
+    switch (status) {
+      case ConnectionStatus.connected:
+        return Icons.wifi;
+      case ConnectionStatus.error:
+        return Icons.wifi_off;
+      case ConnectionStatus.checking:
+        return Icons.network_check;
+    }
+  }
+
   // ── IP warning ────────────────────────────────────────────────────
 
   /// Show the warning banner when there is no usable data or a connection
@@ -243,9 +265,15 @@ class _EnergyMonitorScreenState extends State<EnergyMonitorScreen> {
   Widget _buildBody(MonitorState state) {
     return LayoutBuilder(
       builder: (context, constraints) {
+        widget.controller.updateViewportWidth(constraints.maxWidth);
         final isLandscape = constraints.maxWidth > constraints.maxHeight;
+        final horizontalPadding = constraints.maxWidth < 700 ? 12.0 : 16.0;
+        final verticalPadding = constraints.maxHeight < 600 ? 10.0 : 14.0;
         return Padding(
-          padding: const EdgeInsets.all(20),
+          padding: EdgeInsets.symmetric(
+            horizontal: horizontalPadding,
+            vertical: verticalPadding,
+          ),
           child: isLandscape
               ? _buildLandscape(constraints, state)
               : _buildPortrait(state),
@@ -264,9 +292,9 @@ class _EnergyMonitorScreenState extends State<EnergyMonitorScreen> {
           child: Column(
             children: [
               _rangeSelector(state),
-              const SizedBox(height: 8),
+              const SizedBox(height: 6),
               _chartStats(state),
-              const SizedBox(height: 8),
+              const SizedBox(height: 6),
               Expanded(
                 child: _buildChartPanel(state),
               ),
@@ -303,25 +331,16 @@ class _EnergyMonitorScreenState extends State<EnergyMonitorScreen> {
             ),
           ],
         ),
-        const SizedBox(height: 20),
+        const SizedBox(height: 10),
         _rangeSelector(state),
-        const SizedBox(height: 8),
+        const SizedBox(height: 6),
         _chartStats(state),
-        const SizedBox(height: 8),
+        const SizedBox(height: 6),
         Expanded(
           child: _buildChartPanel(state),
         ),
-        const SizedBox(height: 8),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              _getInternetLabel(state),
-              style: const TextStyle(color: Colors.white70, fontSize: 12),
-            ),
-            _refreshButton(compact: true),
-          ],
-        ),
+        const SizedBox(height: 6),
+        _statusAndRefreshRow(state),
       ],
     );
   }
@@ -356,7 +375,7 @@ class _EnergyMonitorScreenState extends State<EnergyMonitorScreen> {
 
   Widget _infoPanel(MonitorState state) {
     return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
+      mainAxisAlignment: MainAxisAlignment.start,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         EnergyInfoCard(
@@ -369,14 +388,43 @@ class _EnergyMonitorScreenState extends State<EnergyMonitorScreen> {
           value: state.energyData.todaysEnergy,
           icon: Icons.calendar_today,
         ),
-        const SizedBox(height: 16),
-        Text(
-          _getInternetLabel(state),
-          style: const TextStyle(color: Colors.white60, fontSize: 12),
-        ),
         const SizedBox(height: 8),
-        _refreshButton(compact: true),
+        _statusAndRefreshRow(state),
       ],
+    );
+  }
+
+  Widget _statusAndRefreshRow(MonitorState state) {
+    final statusColor = _internetColor(state.internetStatus);
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: const Color(0xFF0D0D0D),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: statusColor.withAlpha(140)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.max,
+        children: [
+          Icon(
+            _internetIcon(state.internetStatus),
+            size: 16,
+            color: statusColor,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              _getInternetLabel(state),
+              style: const TextStyle(color: Colors.white70, fontSize: 12),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          const SizedBox(width: 6),
+          _refreshButton(compact: true),
+        ],
+      ),
     );
   }
 
@@ -386,7 +434,7 @@ class _EnergyMonitorScreenState extends State<EnergyMonitorScreen> {
       children: [
         IconButton(
           visualDensity: VisualDensity.compact,
-          icon: const Icon(Icons.refresh, color: AppColors.label),
+          icon: const Icon(Icons.refresh, color: Colors.white),
           onPressed: widget.controller.refresh,
         ),
         if (!compact)

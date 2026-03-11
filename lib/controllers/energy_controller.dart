@@ -24,6 +24,7 @@ class EnergyController extends ChangeNotifier {
 
   Timer? _fetchTimer;
   Timer? _chartTimer;
+  double _lastViewportWidth = 0;
   int _rangeRequestId = 0;
   bool _hasFreshReading = false;
   int _samplesSincePrune = 0;
@@ -45,8 +46,7 @@ class EnergyController extends ChangeNotifier {
     unawaited(_loadChartRange(_state.chartRange));
     unawaited(refresh());
     _fetchTimer = Timer.periodic(_config.fetchInterval, (_) => refresh());
-    _chartTimer =
-        Timer.periodic(const Duration(minutes: 1), (_) => _pushChartPoint());
+    _restartChartTimer();
   }
 
   void stop() {
@@ -93,6 +93,65 @@ class EnergyController extends ChangeNotifier {
   Future<void> setChartRange(ChartRange range) async {
     if (_state.chartRange == range) return;
     await _loadChartRange(range);
+    _restartChartTimer();
+  }
+
+  void updateViewportWidth(double width) {
+    if (width <= 0) return;
+
+    final oldClass = _viewportClass(_lastViewportWidth);
+    final newClass = _viewportClass(width);
+    _lastViewportWidth = width;
+
+    if (oldClass != newClass && _started && !_disposed) {
+      _restartChartTimer();
+    }
+  }
+
+  void _restartChartTimer() {
+    _chartTimer?.cancel();
+    _chartTimer = Timer.periodic(
+      _chartCadenceForRange(_state.chartRange),
+      (_) => _pushChartPoint(),
+    );
+  }
+
+  Duration _chartCadenceForRange(ChartRange range) {
+    final base = _baseCadenceForRange(range);
+    final viewportClass = _viewportClass(_lastViewportWidth);
+
+    if (viewportClass == _ViewportClass.compact) {
+      return Duration(minutes: base.inMinutes * 2);
+    }
+    if (viewportClass == _ViewportClass.expanded) {
+      final reducedMinutes = (base.inMinutes / 2).round();
+      final floorMinutes = _baseCadenceForRange(ChartRange.lastHour).inMinutes;
+      return Duration(minutes: reducedMinutes < floorMinutes ? floorMinutes : reducedMinutes);
+    }
+
+    return base;
+  }
+
+  Duration _baseCadenceForRange(ChartRange range) {
+    switch (range) {
+      case ChartRange.lastHour:
+        return const Duration(minutes: 5);
+      case ChartRange.last24Hours:
+        return const Duration(minutes: 30);
+      case ChartRange.last7Days:
+        return const Duration(hours: 3);
+      case ChartRange.last30Days:
+        return const Duration(hours: 12);
+      case ChartRange.last90Days:
+        return const Duration(days: 1);
+    }
+  }
+
+  _ViewportClass _viewportClass(double width) {
+    if (width <= 0) return _ViewportClass.regular;
+    if (width < 520) return _ViewportClass.compact;
+    if (width > 1200) return _ViewportClass.expanded;
+    return _ViewportClass.regular;
   }
 
   Future<void> _fetchEnergy() async {
@@ -222,4 +281,10 @@ class EnergyController extends ChangeNotifier {
 
     return result;
   }
+}
+
+enum _ViewportClass {
+  compact,
+  regular,
+  expanded,
 }

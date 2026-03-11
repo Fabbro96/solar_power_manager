@@ -19,44 +19,51 @@ class PowerChart extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final spots = _spots;
-    final hasData = spots.isNotEmpty;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final spots = _spots;
+        final hasData = spots.isNotEmpty;
+        final chartWidth = constraints.maxWidth.isFinite
+            ? constraints.maxWidth
+            : MediaQuery.of(context).size.width;
+        final xInterval = _xIntervalForWidth(chartWidth);
 
-    return Stack(
-      children: [
-        LineChart(
-          LineChartData(
-            backgroundColor: AppColors.background,
-            minX: hasData ? spots.first.x : 0,
-            maxX: hasData ? spots.last.x : 1,
-            minY: _minY,
-            maxY: _maxY,
-            gridData: _buildGridData(spots),
-            titlesData: _buildTitlesData(spots),
-            borderData: FlBorderData(
-              show: true,
-              border: Border.all(color: Colors.white12),
-            ),
-            extraLinesData: _buildReferenceLines(),
-            lineTouchData: _buildTouchData(spots),
-            lineBarsData: [_buildLineData(spots)],
-          ),
-        ),
-        if (!hasData)
-          const Positioned.fill(
-            child: Center(
-              child: Text(
-                'No history in selected range',
-                style: TextStyle(color: Colors.white38, fontSize: 12),
+        return Stack(
+          children: [
+            LineChart(
+              LineChartData(
+                backgroundColor: AppColors.background,
+                minX: hasData ? spots.first.x : 0,
+                maxX: hasData ? spots.last.x : 1,
+                minY: _minY,
+                maxY: _maxY,
+                gridData: _buildGridData(spots, xInterval),
+                titlesData: _buildTitlesData(spots, xInterval),
+                borderData: FlBorderData(
+                  show: true,
+                  border: Border.all(color: Colors.white12),
+                ),
+                extraLinesData: _buildReferenceLines(),
+                lineTouchData: _buildTouchData(spots),
+                lineBarsData: [_buildLineData(spots)],
               ),
             ),
-          ),
-      ],
+            if (!hasData)
+              const Positioned.fill(
+                child: Center(
+                  child: Text(
+                    'No history in selected range',
+                    style: TextStyle(color: Colors.white38, fontSize: 12),
+                  ),
+                ),
+              ),
+          ],
+        );
+      },
     );
   }
 
-  FlGridData _buildGridData(List<FlSpot> spots) {
-    final xInterval = _xInterval;
+  FlGridData _buildGridData(List<FlSpot> spots, double xInterval) {
     final yInterval = _yAxisInterval;
 
     return FlGridData(
@@ -78,13 +85,13 @@ class PowerChart extends StatelessWidget {
     );
   }
 
-  FlTitlesData _buildTitlesData(List<FlSpot> spots) {
+  FlTitlesData _buildTitlesData(List<FlSpot> spots, double xInterval) {
     return FlTitlesData(
       bottomTitles: AxisTitles(
         sideTitles: SideTitles(
           showTitles: showBottomTitles,
           reservedSize: 34,
-          interval: _xInterval,
+          interval: xInterval,
           getTitlesWidget: _bottomTitleWidget,
         ),
       ),
@@ -119,6 +126,8 @@ class PowerChart extends StatelessWidget {
       child: Text(
         DateFormat(labelFormat).format(sampleTime),
         style: AppTextStyles.axisTick,
+        maxLines: 1,
+        overflow: TextOverflow.fade,
       ),
     );
   }
@@ -241,12 +250,40 @@ class PowerChart extends StatelessWidget {
     );
   }
 
-  double get _xInterval {
+  double _xIntervalForWidth(double chartWidth) {
     if (data.length <= 1) return 10;
     final first = data.first.timestamp.millisecondsSinceEpoch / 1000;
     final last = data.last.timestamp.millisecondsSinceEpoch / 1000;
     final range = last - first;
-    return range == 0 ? 10 : range / 6;
+    if (range == 0) return 10;
+
+    final baseStepSeconds = _baseXAxisStep(chartRange).inSeconds.toDouble();
+    final minLabelWidth = chartRange.duration > const Duration(days: 1)
+        ? 56.0
+        : 68.0;
+    final maxLabels = (chartWidth / minLabelWidth).floor().clamp(3, 10);
+
+    final labelsAtBase = (range / baseStepSeconds).ceil();
+    final multiplier = labelsAtBase <= maxLabels
+        ? 1
+        : (labelsAtBase / maxLabels).ceil();
+
+    return baseStepSeconds * multiplier;
+  }
+
+  Duration _baseXAxisStep(ChartRange range) {
+    switch (range) {
+      case ChartRange.lastHour:
+        return const Duration(minutes: 5);
+      case ChartRange.last24Hours:
+        return const Duration(minutes: 30);
+      case ChartRange.last7Days:
+        return const Duration(hours: 3);
+      case ChartRange.last30Days:
+        return const Duration(hours: 12);
+      case ChartRange.last90Days:
+        return const Duration(days: 1);
+    }
   }
 
   double get _yAxisInterval {
