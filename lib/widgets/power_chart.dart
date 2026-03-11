@@ -7,11 +7,13 @@ import '../theme/app_theme.dart';
 
 class PowerChart extends StatelessWidget {
   final List<PowerSample> data;
+  final ChartRange chartRange;
   final bool showBottomTitles;
 
   const PowerChart({
     super.key,
     required this.data,
+    this.chartRange = ChartRange.last24Hours,
     this.showBottomTitles = true,
   });
 
@@ -95,11 +97,15 @@ class PowerChart extends StatelessWidget {
 
     final nearestIndex = value.round().clamp(0, data.length - 1);
     final sampleTime = data[nearestIndex].timestamp;
+    final labelFormat =
+        chartRange.duration > const Duration(days: 1) ? 'dd/MM' : 'HH:mm';
 
     return SideTitleWidget(
       axisSide: meta.axisSide,
-      child: Text(DateFormat('HH:mm').format(sampleTime),
-          style: AppTextStyles.axisTick),
+      child: Text(
+        DateFormat(labelFormat).format(sampleTime),
+        style: AppTextStyles.axisTick,
+      ),
     );
   }
 
@@ -146,7 +152,7 @@ class PowerChart extends StatelessWidget {
           return touchedSpots.map((touched) {
             final index = touched.x.round().clamp(0, data.length - 1);
             final sample = data[index];
-            final time = DateFormat('HH:mm').format(sample.timestamp);
+            final time = DateFormat('dd/MM HH:mm:ss').format(sample.timestamp);
             return LineTooltipItem(
               '$time\n${sample.watts.toStringAsFixed(0)} W',
               const TextStyle(
@@ -172,7 +178,7 @@ class PowerChart extends StatelessWidget {
       horizontalLines: [
         HorizontalLine(
           y: avg,
-          color: Colors.amber.withAlpha(170),
+          color: const Color(0xFFEEB439).withAlpha(170),
           strokeWidth: 1,
           dashArray: const [6, 4],
           label: HorizontalLineLabel(

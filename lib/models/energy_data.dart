@@ -28,6 +28,8 @@ class MonitorState {
   final ConnectionStatus internetStatus;
   final String? errorDetail;
   final List<PowerSample> powerHistory;
+  final ChartRange chartRange;
+  final bool chartLoading;
 
   const MonitorState({
     this.energyData = const EnergyData(
@@ -39,6 +41,8 @@ class MonitorState {
     this.internetStatus = ConnectionStatus.checking,
     this.errorDetail,
     this.powerHistory = const [],
+    this.chartRange = ChartRange.last24Hours,
+    this.chartLoading = false,
   });
 
   MonitorState copyWith({
@@ -47,6 +51,8 @@ class MonitorState {
     ConnectionStatus? internetStatus,
     String? errorDetail,
     List<PowerSample>? powerHistory,
+    ChartRange? chartRange,
+    bool? chartLoading,
   }) {
     return MonitorState(
       energyData: energyData ?? this.energyData,
@@ -54,6 +60,8 @@ class MonitorState {
       internetStatus: internetStatus ?? this.internetStatus,
       errorDetail: errorDetail ?? this.errorDetail,
       powerHistory: powerHistory ?? this.powerHistory,
+      chartRange: chartRange ?? this.chartRange,
+      chartLoading: chartLoading ?? this.chartLoading,
     );
   }
 }

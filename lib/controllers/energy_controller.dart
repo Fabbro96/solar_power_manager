@@ -6,9 +6,13 @@ import '../config/app_config.dart';
 import '../models/energy_data.dart';
 import '../models/power_sample.dart';
 import '../services/energy_service.dart';
+import '../services/power_history_service.dart';
 
 class EnergyController extends ChangeNotifier {
+  static const int _maxVisiblePoints = 480;
+
   final EnergyService _service;
+  final PowerHistoryService? _historyService;
   final AppConfig _config;
 
   MonitorState _state = const MonitorState();
@@ -22,11 +26,14 @@ class EnergyController extends ChangeNotifier {
 
   EnergyController({
     required EnergyService service,
+    PowerHistoryService? historyService,
     AppConfig config = const AppConfig(),
   })  : _service = service,
+        _historyService = historyService,
         _config = config;
 
   void start() {
+    _loadChartRange(_state.chartRange);
     refresh();
     _fetchTimer = Timer.periodic(_config.fetchInterval, (_) => refresh());
     _chartTimer =
@@ -42,6 +49,7 @@ class EnergyController extends ChangeNotifier {
   void dispose() {
     stop();
     _service.dispose();
+    unawaited(_historyService?.dispose());
     super.dispose();
   }
 
@@ -66,6 +74,11 @@ class EnergyController extends ChangeNotifier {
   void updateState(MonitorState newState) {
     _state = newState;
     notifyListeners();
+  }
+
+  Future<void> setChartRange(ChartRange range) async {
+    if (_state.chartRange == range) return;
+    await _loadChartRange(range);
   }
 
   Future<void> _fetchEnergy() async {
@@ -110,12 +123,18 @@ class EnergyController extends ChangeNotifier {
       final power = _state.energyData.latestPowerValue;
       if (power == null) return;
 
-      _powerHistory = List.of(_powerHistory)
-        ..add(PowerSample(timestamp: DateTime.now(), watts: power));
+      final sample = PowerSample(timestamp: DateTime.now(), watts: power);
+      _persistSample(sample);
 
-      if (_powerHistory.length > _config.maxChartPoints) {
-        _powerHistory.removeAt(0);
+      final cutoff = DateTime.now().subtract(_state.chartRange.duration);
+      if (sample.timestamp.isBefore(cutoff)) {
+        return;
       }
+
+      _powerHistory = _downsample(
+        List.of(_powerHistory)..add(sample),
+        maxPoints: _maxVisiblePoints,
+      );
 
       updateState(_state.copyWith(powerHistory: _powerHistory));
     } catch (e) {
@@ -123,5 +142,54 @@ class EnergyController extends ChangeNotifier {
         errorDetail: 'Chart point update failed: ${e.toString()}',
       ));
     }
+  }
+
+  Future<void> _loadChartRange(ChartRange range) async {
+    updateState(_state.copyWith(chartRange: range, chartLoading: true));
+
+    try {
+      final loaded = await _historyService?.loadRange(range: range) ??
+          const <PowerSample>[];
+      _powerHistory = _downsample(loaded, maxPoints: _maxVisiblePoints);
+      updateState(_state.copyWith(
+        chartRange: range,
+        chartLoading: false,
+        powerHistory: _powerHistory,
+      ));
+    } catch (e) {
+      updateState(_state.copyWith(
+        chartRange: range,
+        chartLoading: false,
+        errorDetail: 'History load failed: ${e.toString()}',
+      ));
+    }
+  }
+
+  Future<void> _persistSample(PowerSample sample) async {
+    try {
+      await _historyService?.insertSample(sample);
+      await _historyService?.pruneOldSamples();
+    } catch (e) {
+      updateState(_state.copyWith(
+        errorDetail: 'History save failed: ${e.toString()}',
+      ));
+    }
+  }
+
+  List<PowerSample> _downsample(
+    List<PowerSample> samples, {
+    required int maxPoints,
+  }) {
+    if (samples.length <= maxPoints) return samples;
+
+    final result = <PowerSample>[];
+    final step = (samples.length - 1) / (maxPoints - 1);
+
+    for (var i = 0; i < maxPoints; i++) {
+      final index = (i * step).round();
+      result.add(samples[index]);
+    }
+
+    return result;
   }
 }

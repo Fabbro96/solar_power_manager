@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../controllers/energy_controller.dart';
 import '../models/energy_data.dart';
+import '../models/power_sample.dart';
 import '../theme/app_theme.dart';
 import '../widgets/energy_info_card.dart';
 import '../widgets/power_chart.dart';
@@ -245,7 +246,29 @@ class _EnergyMonitorScreenState extends State<EnergyMonitorScreen> {
                 height: constraints.maxHeight * 0.6,
                 child: Padding(
                   padding: const EdgeInsets.only(right: 20, top: 10),
-                  child: PowerChart(data: state.powerHistory),
+                  child: Column(
+                    children: [
+                      _rangeSelector(state),
+                      const SizedBox(height: 8),
+                      Expanded(
+                        child: Stack(
+                          children: [
+                            PowerChart(
+                              data: state.powerHistory,
+                              chartRange: state.chartRange,
+                            ),
+                            if (state.chartLoading)
+                              const Positioned.fill(
+                                child: Center(
+                                  child:
+                                      CircularProgressIndicator(strokeWidth: 2),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ],
@@ -283,8 +306,24 @@ class _EnergyMonitorScreenState extends State<EnergyMonitorScreen> {
           ],
         ),
         const SizedBox(height: 20),
+        _rangeSelector(state),
+        const SizedBox(height: 10),
         Expanded(
-          child: PowerChart(data: state.powerHistory, showBottomTitles: false),
+          child: Stack(
+            children: [
+              PowerChart(
+                data: state.powerHistory,
+                chartRange: state.chartRange,
+                showBottomTitles: false,
+              ),
+              if (state.chartLoading)
+                const Positioned.fill(
+                  child: Center(
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                ),
+            ],
+          ),
         ),
         const Spacer(),
         Center(
@@ -344,6 +383,37 @@ class _EnergyMonitorScreenState extends State<EnergyMonitorScreen> {
         ),
         const Text('Auto-refresh active', style: AppTextStyles.muted),
       ],
+    );
+  }
+
+  Widget _rangeSelector(MonitorState state) {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: ChartRange.values.map((range) {
+          final selected = range == state.chartRange;
+          return Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: ChoiceChip(
+              label: Text(range.label),
+              selected: selected,
+              onSelected: (_) => widget.controller.setChartRange(range),
+              labelStyle: TextStyle(
+                color: selected ? Colors.black : Colors.white70,
+                fontWeight: FontWeight.w600,
+                fontSize: 12,
+              ),
+              selectedColor: AppColors.accent,
+              backgroundColor: const Color(0xFF111111),
+              side: const BorderSide(color: Colors.white12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+          );
+        }).toList(growable: false),
+      ),
     );
   }
 }

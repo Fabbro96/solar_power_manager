@@ -5,6 +5,7 @@ import 'config/app_config.dart';
 import 'controllers/energy_controller.dart';
 import 'screens/energy_monitor_screen.dart';
 import 'services/energy_service.dart';
+import 'services/power_history_service.dart';
 import 'services/settings_service.dart';
 import 'theme/app_theme.dart';
 
@@ -12,6 +13,7 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   final settings = await SettingsService.create();
+  final historyService = await PowerHistoryService.create();
 
   await SystemChrome.setPreferredOrientations([
     DeviceOrientation.landscapeRight,
@@ -30,6 +32,7 @@ void main() async {
 
   final controller = EnergyController(
     service: energyService,
+    historyService: historyService,
     config: const AppConfig(
       fetchInterval: Duration(seconds: 30),
       maxChartPoints: 60,
