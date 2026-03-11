@@ -1,10 +1,10 @@
 import 'dart:async';
 
-import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/foundation.dart';
 
 import '../config/app_config.dart';
 import '../models/energy_data.dart';
+import '../models/power_sample.dart';
 import '../services/energy_service.dart';
 
 class EnergyController extends ChangeNotifier {
@@ -15,8 +15,7 @@ class EnergyController extends ChangeNotifier {
 
   MonitorState get state => _state;
 
-  List<FlSpot> _powerHistory = [];
-  int _xTick = 0;
+  List<PowerSample> _powerHistory = [];
 
   Timer? _fetchTimer;
   Timer? _chartTimer;
@@ -57,6 +56,7 @@ class EnergyController extends ChangeNotifier {
 
   Future<void> updateInverterIp(String newIp) async {
     _service.updateInverterIp(newIp);
+    _powerHistory = [];
     _state = const MonitorState();
     notifyListeners();
     stop();
@@ -111,13 +111,12 @@ class EnergyController extends ChangeNotifier {
       if (power == null) return;
 
       _powerHistory = List.of(_powerHistory)
-        ..add(FlSpot(_xTick.toDouble(), power));
+        ..add(PowerSample(timestamp: DateTime.now(), watts: power));
 
       if (_powerHistory.length > _config.maxChartPoints) {
         _powerHistory.removeAt(0);
       }
 
-      _xTick++;
       updateState(_state.copyWith(powerHistory: _powerHistory));
     } catch (e) {
       updateState(_state.copyWith(

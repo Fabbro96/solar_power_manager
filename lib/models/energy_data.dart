@@ -1,4 +1,4 @@
-import 'package:fl_chart/fl_chart.dart';
+import 'power_sample.dart';
 
 class EnergyData {
   final String todaysEnergy;
@@ -27,7 +27,7 @@ class MonitorState {
   final ConnectionStatus inverterStatus;
   final ConnectionStatus internetStatus;
   final String? errorDetail;
-  final List<FlSpot> powerHistory;
+  final List<PowerSample> powerHistory;
 
   const MonitorState({
     this.energyData = const EnergyData(
@@ -46,7 +46,7 @@ class MonitorState {
     ConnectionStatus? inverterStatus,
     ConnectionStatus? internetStatus,
     String? errorDetail,
-    List<FlSpot>? powerHistory,
+    List<PowerSample>? powerHistory,
   }) {
     return MonitorState(
       energyData: energyData ?? this.energyData,

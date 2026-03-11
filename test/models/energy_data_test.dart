@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:fl_chart/fl_chart.dart';
 import 'package:solar_power_manager/models/energy_data.dart';
+import 'package:solar_power_manager/models/power_sample.dart';
 
 void main() {
   group('EnergyData', () {
@@ -46,7 +46,9 @@ void main() {
         powerNow: '500 W',
         lastUpdate: 'Test Time',
       );
-      final newHistory = [const FlSpot(0, 500)];
+      final newHistory = [
+        PowerSample(timestamp: DateTime(2026, 3, 11, 9, 47), watts: 500),
+      ];
 
       final newState = state.copyWith(
         energyData: energyData,
