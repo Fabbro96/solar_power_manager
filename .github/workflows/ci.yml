@@ -53,25 +53,33 @@ jobs:
             exit 1
           fi
 
-          NORMALIZED_APK="build/app/outputs/solar-power-manager-${GITHUB_SHA::7}-release.apk"
-          cp "$APK_PATH" "$NORMALIZED_APK"
+          APP_VERSION="$(grep '^version:' pubspec.yaml | awk '{print $2}')"
+          SAFE_VERSION="${APP_VERSION//+/--build-}"
+          VERSIONED_APK="build/app/outputs/solar-power-manager-v${SAFE_VERSION}.apk"
+          LATEST_APK="build/app/outputs/solar-power-manager-latest.apk"
 
-          echo "apk_path=$NORMALIZED_APK" >> "$GITHUB_OUTPUT"
-          echo "Resolved APK: $NORMALIZED_APK"
+          cp "$APK_PATH" "$VERSIONED_APK"
+          cp "$APK_PATH" "$LATEST_APK"
+
+          echo "artifact_apk_path=$VERSIONED_APK" >> "$GITHUB_OUTPUT"
+          echo "release_apk_path=$LATEST_APK" >> "$GITHUB_OUTPUT"
+          echo "app_version=$APP_VERSION" >> "$GITHUB_OUTPUT"
+          echo "Resolved artifact APK: $VERSIONED_APK"
+          echo "Resolved release APK: $LATEST_APK"
 
       - name: Upload Android APK artifact
         if: github.event_name == 'push'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: solar-power-manager-apk-${{ github.sha }}
-          path: ${{ steps.locate_apk.outputs.apk_path }}
+          name: solar-power-manager-apk-v${{ steps.locate_apk.outputs.app_version }}
+          path: ${{ steps.locate_apk.outputs.artifact_apk_path }}
           if-no-files-found: error
 
       - name: Publish APK to latest prerelease
         if: github.event_name == 'push'
         env:
           GH_TOKEN: ${{ github.token }}
-          APK_PATH: ${{ steps.locate_apk.outputs.apk_path }}
+          APK_PATH: ${{ steps.locate_apk.outputs.release_apk_path }}
         shell: bash
         run: |
           set -euo pipefail
@@ -79,6 +87,12 @@ jobs:
           NOTES="Automated APK build from ${GITHUB_REF_NAME}.\nCommit: ${GITHUB_SHA}"
 
           if gh release view latest-apk >/dev/null 2>&1; then
+            gh release view latest-apk --json assets --jq '.assets[]?.name' | while read -r asset_name; do
+              [[ -z "$asset_name" ]] && continue
+              if [[ "$asset_name" == *.apk && "$asset_name" != "solar-power-manager-latest.apk" ]]; then
+                gh release delete-asset latest-apk "$asset_name" --yes
+              fi
+            done
             gh release upload latest-apk "$APK_PATH" --clobber
             gh release edit latest-apk \
               --title "Latest APK" \
