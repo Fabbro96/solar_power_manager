@@ -24,7 +24,6 @@ class EnergyController extends ChangeNotifier {
   List<PowerSample> _powerHistory = [];
 
   Timer? _fetchTimer;
-  Timer? _chartTimer;
   double _lastViewportWidth = 0;
   DateTime? _lastStoredSampleAt;
   DateTime? _lastInternetCheckAt;
@@ -49,14 +48,11 @@ class EnergyController extends ChangeNotifier {
     unawaited(_loadChartRange(_state.chartRange));
     unawaited(refresh());
     _fetchTimer = Timer.periodic(_config.fetchInterval, (_) => refresh());
-    _restartChartTimer();
   }
 
   void stop() {
     _fetchTimer?.cancel();
-    _chartTimer?.cancel();
     _fetchTimer = null;
-    _chartTimer = null;
     _started = false;
   }
 
@@ -105,29 +101,12 @@ class EnergyController extends ChangeNotifier {
   Future<void> setChartRange(ChartRange range) async {
     if (_state.chartRange == range) return;
     await _loadChartRange(range);
-    _restartChartTimer();
   }
 
   void updateViewportWidth(double width) {
     if (width <= 0) return;
-
-    final oldClass = _viewportClass(_lastViewportWidth);
-    final newClass = _viewportClass(width);
+    // cadence is read from _lastViewportWidth on the next _pushChartPoint call
     _lastViewportWidth = width;
-
-    if (oldClass != newClass && _started && !_disposed) {
-      _restartChartTimer();
-    }
-  }
-
-  void _restartChartTimer() {
-    _chartTimer?.cancel();
-    // Keep this lightweight heartbeat frequent; actual point insertion is
-    // cadence-gated in _pushChartPoint to avoid missing samples.
-    _chartTimer = Timer.periodic(
-      const Duration(minutes: 1),
-      (_) => _pushChartPoint(),
-    );
   }
 
   Duration _chartCadenceForRange(ChartRange range) {

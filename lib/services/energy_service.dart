@@ -20,10 +20,31 @@ class EnergyServiceConfig {
 class EnergyService {
   EnergyServiceConfig _config;
   final http.Client _client;
+  late String _authHeader;
+
+  // Pre-compiled regex constants — avoids re-compilation on every call.
+  static final _powerRegex =
+      RegExp(r'([0-9]+(?:\.[0-9]+)?)\s*W\b', caseSensitive: false);
+  static final _kwhRegex =
+      RegExp(r'([0-9]+(?:\.[0-9]+)?)\s*kWh\b', caseSensitive: false);
+  static final _cellRegex = RegExp(
+    r'<t[dh][^>]*>(.*?)</t[dh]>',
+    caseSensitive: false,
+    dotAll: true,
+  );
+  static final _htmlTagRegex = RegExp(r'<[^>]+>');
+  static final _whitespaceRegex = RegExp(r'\s+');
 
   EnergyService({required EnergyServiceConfig config, http.Client? client})
       : _config = config,
-        _client = client ?? http.Client();
+        _client = client ?? http.Client() {
+    _authHeader = _buildAuthHeader(config);
+  }
+
+  static String _buildAuthHeader(EnergyServiceConfig config) {
+    final credentials = '${config.username}:${config.password}';
+    return 'Basic ${base64Encode(utf8.encode(credentials))}';
+  }
 
   EnergyServiceConfig get config => _config;
 
@@ -40,12 +61,9 @@ class EnergyService {
 
   Future<EnergyData> fetchEnergyData() async {
     try {
-      final credentials = '${config.username}:${config.password}';
-      final encodedCredentials = base64Encode(utf8.encode(credentials));
-
       final response = await _client.get(
         Uri.parse(config.url),
-        headers: {'Authorization': 'Basic $encodedCredentials'},
+        headers: {'Authorization': _authHeader},
       ).timeout(const Duration(seconds: 10));
 
       if (response.statusCode != 200) {
@@ -79,10 +97,11 @@ class EnergyService {
 
   Future<bool> checkInternetConnectivity() async {
     try {
+      // HEAD avoids downloading the response body (~200 KB for google.com).
       final response = await _client
-          .get(Uri.parse('https://www.google.com'))
+          .head(Uri.parse('https://www.google.com'))
           .timeout(const Duration(seconds: 5));
-      return response.statusCode == 200;
+      return response.statusCode < 400;
     } catch (_) {
       return false;
     }
@@ -96,18 +115,12 @@ class EnergyService {
 
     // Fallback for pages that render values in free text or scripts.
     if (labels.any((l) => l.toLowerCase().contains('power'))) {
-      final power =
-          RegExp(r'([0-9]+(?:\\.[0-9]+)?)\\s*W\\b', caseSensitive: false)
-              .firstMatch(html)
-              ?.group(1);
+      final power = _powerRegex.firstMatch(html)?.group(1);
       if (power != null) return '$power W';
     }
 
     if (labels.any((l) => l.toLowerCase().contains('today'))) {
-      final energy =
-          RegExp(r'([0-9]+(?:\\.[0-9]+)?)\\s*kWh\\b', caseSensitive: false)
-              .firstMatch(html)
-              ?.group(1);
+      final energy = _kwhRegex.firstMatch(html)?.group(1);
       if (energy != null) return '$energy kWh';
     }
 
@@ -117,9 +130,7 @@ class EnergyService {
   String? _extractFromTableCells(String html, List<String> labels) {
     final normalizedLabels = labels.map(_normalizeLabel).toSet();
 
-    final cellRegex = RegExp(r'<t[dh][^>]*>(.*?)</t[dh]>',
-        caseSensitive: false, dotAll: true);
-    final cells = cellRegex
+    final cells = _cellRegex
         .allMatches(html)
         .map((m) => _stripHtml(m.group(1) ?? ''))
         .where((s) => s.isNotEmpty)
@@ -137,16 +148,16 @@ class EnergyService {
   String _normalizeLabel(String value) {
     return value
         .replaceAll(':', '')
-        .replaceAll(RegExp(r'\\s+'), ' ')
+        .replaceAll(_whitespaceRegex, ' ')
         .trim()
         .toLowerCase();
   }
 
   String _stripHtml(String input) {
     return input
-        .replaceAll(RegExp(r'<[^>]+>'), ' ')
+        .replaceAll(_htmlTagRegex, ' ')
         .replaceAll('&nbsp;', ' ')
-        .replaceAll(RegExp(r'\\s+'), ' ')
+        .replaceAll(_whitespaceRegex, ' ')
         .trim();
   }
 
