@@ -308,13 +308,15 @@ class _EnergyMonitorScreenState extends State<EnergyMonitorScreen> {
         const SizedBox(height: 20),
         _rangeSelector(state),
         const SizedBox(height: 10),
+        _chartStats(state),
+        const SizedBox(height: 10),
         Expanded(
           child: Stack(
             children: [
               PowerChart(
                 data: state.powerHistory,
                 chartRange: state.chartRange,
-                showBottomTitles: false,
+                showBottomTitles: true,
               ),
               if (state.chartLoading)
                 const Positioned.fill(
@@ -413,6 +415,54 @@ class _EnergyMonitorScreenState extends State<EnergyMonitorScreen> {
             ),
           );
         }).toList(growable: false),
+      ),
+    );
+  }
+
+  Widget _chartStats(MonitorState state) {
+    String format(double? v) => v == null ? '--' : '${v.toStringAsFixed(0)} W';
+
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        _statChip('MIN', format(state.minPower)),
+        _statChip('AVG', format(state.avgPower)),
+        _statChip('MAX', format(state.maxPower)),
+        _statChip('SAMPLES', '${state.powerHistory.length}'),
+      ],
+    );
+  }
+
+  Widget _statChip(String label, String value) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: const Color(0xFF0D0D0D),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.white12),
+      ),
+      child: RichText(
+        text: TextSpan(
+          children: [
+            TextSpan(
+              text: '$label ',
+              style: const TextStyle(
+                color: Colors.white54,
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            TextSpan(
+              text: value,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

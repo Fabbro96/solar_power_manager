@@ -20,24 +20,38 @@ class PowerChart extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final spots = _spots;
+    final hasData = spots.isNotEmpty;
 
-    return LineChart(
-      LineChartData(
-        backgroundColor: AppColors.background,
-        minX: spots.isEmpty ? 0 : spots.first.x,
-        maxX: spots.isEmpty ? 0 : spots.last.x,
-        minY: _minY,
-        maxY: _maxY,
-        gridData: _buildGridData(spots),
-        titlesData: _buildTitlesData(spots),
-        borderData: FlBorderData(
-          show: true,
-          border: Border.all(color: Colors.white12),
+    return Stack(
+      children: [
+        LineChart(
+          LineChartData(
+            backgroundColor: AppColors.background,
+            minX: hasData ? spots.first.x : 0,
+            maxX: hasData ? spots.last.x : 1,
+            minY: _minY,
+            maxY: _maxY,
+            gridData: _buildGridData(spots),
+            titlesData: _buildTitlesData(spots),
+            borderData: FlBorderData(
+              show: true,
+              border: Border.all(color: Colors.white12),
+            ),
+            extraLinesData: _buildAverageLine(),
+            lineTouchData: _buildTouchData(spots),
+            lineBarsData: [_buildLineData(spots)],
+          ),
         ),
-        extraLinesData: _buildAverageLine(),
-        lineTouchData: _buildTouchData(spots),
-        lineBarsData: [_buildLineData(spots)],
-      ),
+        if (!hasData)
+          const Positioned.fill(
+            child: Center(
+              child: Text(
+                'No history in selected range',
+                style: TextStyle(color: Colors.white38, fontSize: 12),
+              ),
+            ),
+          ),
+      ],
     );
   }
 
@@ -95,8 +109,8 @@ class PowerChart extends StatelessWidget {
       return SideTitleWidget(axisSide: meta.axisSide, child: const Text(''));
     }
 
-    final nearestIndex = value.round().clamp(0, data.length - 1);
-    final sampleTime = data[nearestIndex].timestamp;
+    final sampleTime =
+        DateTime.fromMillisecondsSinceEpoch((value * 1000).round());
     final labelFormat =
         chartRange.duration > const Duration(days: 1) ? 'dd/MM' : 'HH:mm';
 
@@ -150,7 +164,7 @@ class PowerChart extends StatelessWidget {
         fitInsideVertically: true,
         getTooltipItems: (touchedSpots) {
           return touchedSpots.map((touched) {
-            final index = touched.x.round().clamp(0, data.length - 1);
+            final index = touched.spotIndex.clamp(0, data.length - 1);
             final sample = data[index];
             final time = DateFormat('dd/MM HH:mm:ss').format(sample.timestamp);
             return LineTooltipItem(
@@ -201,14 +215,19 @@ class PowerChart extends StatelessWidget {
     if (data.isEmpty) return const [];
     return List<FlSpot>.generate(
       data.length,
-      (index) => FlSpot(index.toDouble(), data[index].watts),
+      (index) => FlSpot(
+        data[index].timestamp.millisecondsSinceEpoch / 1000,
+        data[index].watts,
+      ),
       growable: false,
     );
   }
 
   double get _xInterval {
     if (data.length <= 1) return 10;
-    final range = (data.length - 1).toDouble();
+    final first = data.first.timestamp.millisecondsSinceEpoch / 1000;
+    final last = data.last.timestamp.millisecondsSinceEpoch / 1000;
+    final range = last - first;
     return range == 0 ? 10 : range / 6;
   }
 

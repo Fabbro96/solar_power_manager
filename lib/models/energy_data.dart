@@ -64,4 +64,20 @@ class MonitorState {
       chartLoading: chartLoading ?? this.chartLoading,
     );
   }
+
+  double? get minPower {
+    if (powerHistory.isEmpty) return null;
+    return powerHistory.map((s) => s.watts).reduce((a, b) => a < b ? a : b);
+  }
+
+  double? get maxPower {
+    if (powerHistory.isEmpty) return null;
+    return powerHistory.map((s) => s.watts).reduce((a, b) => a > b ? a : b);
+  }
+
+  double? get avgPower {
+    if (powerHistory.isEmpty) return null;
+    final total = powerHistory.fold<double>(0, (sum, s) => sum + s.watts);
+    return total / powerHistory.length;
+  }
 }

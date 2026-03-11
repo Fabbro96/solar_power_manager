@@ -10,6 +10,7 @@ import '../services/power_history_service.dart';
 
 class EnergyController extends ChangeNotifier {
   static const int _maxVisiblePoints = 480;
+  static const int _pruneEverySamples = 24;
 
   final EnergyService _service;
   final PowerHistoryService? _historyService;
@@ -23,6 +24,9 @@ class EnergyController extends ChangeNotifier {
 
   Timer? _fetchTimer;
   Timer? _chartTimer;
+  int _rangeRequestId = 0;
+  bool _hasFreshReading = false;
+  int _samplesSincePrune = 0;
 
   EnergyController({
     required EnergyService service,
@@ -33,7 +37,7 @@ class EnergyController extends ChangeNotifier {
         _config = config;
 
   void start() {
-    _loadChartRange(_state.chartRange);
+    unawaited(_loadChartRange(_state.chartRange));
     refresh();
     _fetchTimer = Timer.periodic(_config.fetchInterval, (_) => refresh());
     _chartTimer =
@@ -84,17 +88,20 @@ class EnergyController extends ChangeNotifier {
   Future<void> _fetchEnergy() async {
     try {
       final data = await _service.fetchEnergyData();
+      _hasFreshReading = data.latestPowerValue != null;
       updateState(_state.copyWith(
         energyData: data,
         inverterStatus: ConnectionStatus.connected,
         errorDetail: null,
       ));
     } on EnergyServiceException catch (e) {
+      _hasFreshReading = false;
       updateState(_state.copyWith(
         inverterStatus: ConnectionStatus.error,
         errorDetail: e.message,
       ));
     } catch (e) {
+      _hasFreshReading = false;
       updateState(_state.copyWith(
         inverterStatus: ConnectionStatus.error,
         errorDetail: e.toString(),
@@ -120,11 +127,14 @@ class EnergyController extends ChangeNotifier {
 
   void _pushChartPoint() {
     try {
+      if (!_hasFreshReading) return;
+
       final power = _state.energyData.latestPowerValue;
       if (power == null) return;
 
       final sample = PowerSample(timestamp: DateTime.now(), watts: power);
-      _persistSample(sample);
+      _hasFreshReading = false;
+      unawaited(_persistSample(sample));
 
       final cutoff = DateTime.now().subtract(_state.chartRange.duration);
       if (sample.timestamp.isBefore(cutoff)) {
@@ -145,11 +155,14 @@ class EnergyController extends ChangeNotifier {
   }
 
   Future<void> _loadChartRange(ChartRange range) async {
+    final requestId = ++_rangeRequestId;
     updateState(_state.copyWith(chartRange: range, chartLoading: true));
 
     try {
       final loaded = await _historyService?.loadRange(range: range) ??
           const <PowerSample>[];
+      if (requestId != _rangeRequestId) return;
+
       _powerHistory = _downsample(loaded, maxPoints: _maxVisiblePoints);
       updateState(_state.copyWith(
         chartRange: range,
@@ -157,6 +170,8 @@ class EnergyController extends ChangeNotifier {
         powerHistory: _powerHistory,
       ));
     } catch (e) {
+      if (requestId != _rangeRequestId) return;
+
       updateState(_state.copyWith(
         chartRange: range,
         chartLoading: false,
@@ -168,7 +183,11 @@ class EnergyController extends ChangeNotifier {
   Future<void> _persistSample(PowerSample sample) async {
     try {
       await _historyService?.insertSample(sample);
-      await _historyService?.pruneOldSamples();
+      _samplesSincePrune++;
+      if (_samplesSincePrune >= _pruneEverySamples) {
+        _samplesSincePrune = 0;
+        await _historyService?.pruneOldSamples();
+      }
     } catch (e) {
       updateState(_state.copyWith(
         errorDetail: 'History save failed: ${e.toString()}',
