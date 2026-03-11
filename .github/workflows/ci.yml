@@ -46,6 +46,10 @@ jobs:
       - name: Run tests
         run: flutter test
 
+      - name: Clean stale build artifacts
+        if: github.event_name == 'push'
+        run: rm -rf build/app/outputs
+
       - name: Build Android APK
         if: github.event_name == 'push'
         run: flutter build apk --release --split-per-abi --no-pub
