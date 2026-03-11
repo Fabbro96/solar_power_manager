@@ -34,7 +34,7 @@ void main() async {
     service: energyService,
     historyService: historyService,
     config: const AppConfig(
-      fetchInterval: Duration(seconds: 30),
+      fetchInterval: Duration(seconds: 90),
       maxChartPoints: 60,
     ),
   );

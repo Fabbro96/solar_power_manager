@@ -9,7 +9,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
 
@@ -32,13 +32,41 @@ jobs:
         run: flutter pub get
 
       - name: Build APK
-        run: flutter build apk --release
+        run: flutter build apk --release --split-per-abi
 
-      # Note: APK build is successful. Manual release upload required due to token permissions.
-      # Uncomment below if needed with proper token permissions configured.
-      # - name: Upload APK to Release
-      #   uses: softprops/action-gh-release@v1
-      #   with:
-      #     files: build/app/outputs/flutter-apk/solar-power-manager-*-release.apk
-      #   env:
-      #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Publish versioned APK on tag release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          TAG_NAME="${GITHUB_REF_NAME}"
+          APP_VERSION="$(grep '^version:' pubspec.yaml | awk '{print $2}')"
+          APK_PATH="$(find build/app/outputs -type f -name '*arm64-v8a-release.apk' | head -n 1 || true)"
+          if [[ -z "$APK_PATH" ]]; then
+            APK_PATH="$(find build/app/outputs -type f -name '*.apk' | head -n 1 || true)"
+          fi
+          if [[ -z "$APK_PATH" ]]; then
+            echo "No APK found under build/app/outputs"
+            find build/app/outputs -maxdepth 5 -type f | sort
+            exit 1
+          fi
+
+          ASSET_NAME="solar-power-manager-${TAG_NAME}.apk"
+          VERSIONED_APK="build/app/outputs/${ASSET_NAME}"
+          cp "$APK_PATH" "$VERSIONED_APK"
+
+          RELEASE_TITLE="Solar Power Manager ${TAG_NAME}"
+          NOTES="Automated release for ${TAG_NAME}.\nApp version: ${APP_VERSION}\nCommit: ${GITHUB_SHA}"
+
+          if gh release view "$TAG_NAME" >/dev/null 2>&1; then
+            gh release upload "$TAG_NAME" "$VERSIONED_APK" --clobber
+            gh release edit "$TAG_NAME" --title "$RELEASE_TITLE" --notes "$NOTES"
+          else
+            gh release create "$TAG_NAME" "$VERSIONED_APK" \
+              --title "$RELEASE_TITLE" \
+              --target "$GITHUB_SHA" \
+              --notes "$NOTES"
+          fi
+

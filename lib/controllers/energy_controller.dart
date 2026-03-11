@@ -11,6 +11,7 @@ import '../services/power_history_service.dart';
 class EnergyController extends ChangeNotifier {
   static const int _maxVisiblePoints = 480;
   static const int _pruneEverySamples = 24;
+  static const Duration _internetCheckInterval = Duration(minutes: 5);
 
   final EnergyService _service;
   final PowerHistoryService? _historyService;
@@ -26,6 +27,7 @@ class EnergyController extends ChangeNotifier {
   Timer? _chartTimer;
   double _lastViewportWidth = 0;
   DateTime? _lastStoredSampleAt;
+  DateTime? _lastInternetCheckAt;
   int _rangeRequestId = 0;
   bool _hasFreshReading = false;
   int _samplesSincePrune = 0;
@@ -68,7 +70,16 @@ class EnergyController extends ChangeNotifier {
   }
 
   Future<void> refresh() async {
-    await Future.wait([_fetchEnergy(), _checkInternet()]);
+    await _fetchEnergy();
+
+    final now = DateTime.now();
+    final shouldCheckInternet = _lastInternetCheckAt == null ||
+        now.difference(_lastInternetCheckAt!) >= _internetCheckInterval;
+
+    if (shouldCheckInternet) {
+      _lastInternetCheckAt = now;
+      await _checkInternet();
+    }
   }
 
   String get currentInverterIp {

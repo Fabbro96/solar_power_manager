@@ -23,17 +23,37 @@ class EnergyMonitorScreen extends StatefulWidget {
   State<EnergyMonitorScreen> createState() => _EnergyMonitorScreenState();
 }
 
-class _EnergyMonitorScreenState extends State<EnergyMonitorScreen> {
+class _EnergyMonitorScreenState extends State<EnergyMonitorScreen>
+    with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     widget.controller.start();
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     widget.controller.stop();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (!mounted) return;
+
+    switch (state) {
+      case AppLifecycleState.resumed:
+        widget.controller.start();
+        break;
+      case AppLifecycleState.inactive:
+      case AppLifecycleState.paused:
+      case AppLifecycleState.detached:
+      case AppLifecycleState.hidden:
+        widget.controller.stop();
+        break;
+    }
   }
 
   // ── Helpers ───────────────────────────────────────────────────────
