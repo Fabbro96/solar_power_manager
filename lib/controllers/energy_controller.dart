@@ -27,6 +27,8 @@ class EnergyController extends ChangeNotifier {
   int _rangeRequestId = 0;
   bool _hasFreshReading = false;
   int _samplesSincePrune = 0;
+  bool _started = false;
+  bool _disposed = false;
 
   EnergyController({
     required EnergyService service,
@@ -37,8 +39,11 @@ class EnergyController extends ChangeNotifier {
         _config = config;
 
   void start() {
+    if (_started || _disposed) return;
+    _started = true;
+
     unawaited(_loadChartRange(_state.chartRange));
-    refresh();
+    unawaited(refresh());
     _fetchTimer = Timer.periodic(_config.fetchInterval, (_) => refresh());
     _chartTimer =
         Timer.periodic(const Duration(minutes: 1), (_) => _pushChartPoint());
@@ -47,10 +52,14 @@ class EnergyController extends ChangeNotifier {
   void stop() {
     _fetchTimer?.cancel();
     _chartTimer?.cancel();
+    _fetchTimer = null;
+    _chartTimer = null;
+    _started = false;
   }
 
   @override
   void dispose() {
+    _disposed = true;
     stop();
     _service.dispose();
     unawaited(_historyService?.dispose());
@@ -67,15 +76,16 @@ class EnergyController extends ChangeNotifier {
   }
 
   Future<void> updateInverterIp(String newIp) async {
+    final previousRange = _state.chartRange;
     _service.updateInverterIp(newIp);
     _powerHistory = [];
-    _state = const MonitorState();
-    notifyListeners();
+    updateState(MonitorState(chartRange: previousRange));
     stop();
     start();
   }
 
   void updateState(MonitorState newState) {
+    if (_disposed) return;
     _state = newState;
     notifyListeners();
   }
@@ -189,6 +199,7 @@ class EnergyController extends ChangeNotifier {
         await _historyService?.pruneOldSamples();
       }
     } catch (e) {
+      if (_disposed) return;
       updateState(_state.copyWith(
         errorDetail: 'History save failed: ${e.toString()}',
       ));
