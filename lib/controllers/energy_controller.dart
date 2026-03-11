@@ -126,7 +126,9 @@ class EnergyController extends ChangeNotifier {
     if (viewportClass == _ViewportClass.expanded) {
       final reducedMinutes = (base.inMinutes / 2).round();
       final floorMinutes = _baseCadenceForRange(ChartRange.lastHour).inMinutes;
-      return Duration(minutes: reducedMinutes < floorMinutes ? floorMinutes : reducedMinutes);
+      return Duration(
+          minutes:
+              reducedMinutes < floorMinutes ? floorMinutes : reducedMinutes);
     }
 
     return base;

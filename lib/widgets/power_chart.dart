@@ -258,15 +258,13 @@ class PowerChart extends StatelessWidget {
     if (range == 0) return 10;
 
     final baseStepSeconds = _baseXAxisStep(chartRange).inSeconds.toDouble();
-    final minLabelWidth = chartRange.duration > const Duration(days: 1)
-        ? 56.0
-        : 68.0;
+    final minLabelWidth =
+        chartRange.duration > const Duration(days: 1) ? 56.0 : 68.0;
     final maxLabels = (chartWidth / minLabelWidth).floor().clamp(3, 10);
 
     final labelsAtBase = (range / baseStepSeconds).ceil();
-    final multiplier = labelsAtBase <= maxLabels
-        ? 1
-        : (labelsAtBase / maxLabels).ceil();
+    final multiplier =
+        labelsAtBase <= maxLabels ? 1 : (labelsAtBase / maxLabels).ceil();
 
     return baseStepSeconds * multiplier;
   }
