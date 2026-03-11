@@ -48,6 +48,29 @@ class _EnergyMonitorScreenState extends State<EnergyMonitorScreen> {
     return 'Solar Monitor';
   }
 
+  Widget _buildAppBarTitle(MonitorState state) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          _getAppBarTitle(state),
+          style: AppTextStyles.appBarTitle.copyWith(fontSize: 18),
+          overflow: TextOverflow.ellipsis,
+        ),
+        Text(
+          'Last update: ${state.energyData.lastUpdate}',
+          style: const TextStyle(
+            color: Colors.white54,
+            fontSize: 11,
+            fontWeight: FontWeight.w500,
+          ),
+          overflow: TextOverflow.ellipsis,
+        ),
+      ],
+    );
+  }
+
   String _getInternetLabel(MonitorState state) {
     switch (state.internetStatus) {
       case ConnectionStatus.connected:
@@ -163,7 +186,7 @@ class _EnergyMonitorScreenState extends State<EnergyMonitorScreen> {
         final state = widget.controller.state;
         return Scaffold(
           appBar: AppBar(
-            title: Text(_getAppBarTitle(state)),
+            title: _buildAppBarTitle(state),
             actions: [
               IconButton(
                 tooltip: 'Change inverter IP',
@@ -237,47 +260,21 @@ class _EnergyMonitorScreenState extends State<EnergyMonitorScreen> {
     return Row(
       children: [
         Expanded(
-          flex: 2,
+          flex: 3,
           child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              _lastUpdateText(state),
-              SizedBox(
-                height: constraints.maxHeight * 0.6,
-                child: Padding(
-                  padding: const EdgeInsets.only(right: 20, top: 10),
-                  child: Column(
-                    children: [
-                      _rangeSelector(state),
-                      const SizedBox(height: 8),
-                      _chartStats(state),
-                      const SizedBox(height: 8),
-                      Expanded(
-                        child: Stack(
-                          children: [
-                            PowerChart(
-                              data: state.powerHistory,
-                              chartRange: state.chartRange,
-                            ),
-                            if (state.chartLoading)
-                              const Positioned.fill(
-                                child: Center(
-                                  child:
-                                      CircularProgressIndicator(strokeWidth: 2),
-                                ),
-                              ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
+              _rangeSelector(state),
+              const SizedBox(height: 8),
+              _chartStats(state),
+              const SizedBox(height: 8),
+              Expanded(
+                child: _buildChartPanel(state),
               ),
             ],
           ),
         ),
-        const SizedBox(width: 20),
-        Expanded(child: _infoPanel(state)),
+        const SizedBox(width: 14),
+        Expanded(flex: 2, child: _infoPanel(state)),
       ],
     );
   }
@@ -288,7 +285,6 @@ class _EnergyMonitorScreenState extends State<EnergyMonitorScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _lastUpdateText(state),
         Row(
           children: [
             Expanded(
@@ -309,53 +305,54 @@ class _EnergyMonitorScreenState extends State<EnergyMonitorScreen> {
         ),
         const SizedBox(height: 20),
         _rangeSelector(state),
-        const SizedBox(height: 10),
+        const SizedBox(height: 8),
         _chartStats(state),
-        const SizedBox(height: 10),
+        const SizedBox(height: 8),
         Expanded(
-          child: Stack(
-            children: [
-              PowerChart(
-                data: state.powerHistory,
-                chartRange: state.chartRange,
-                showBottomTitles: true,
-              ),
-              if (state.chartLoading)
-                const Positioned.fill(
-                  child: Center(
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  ),
-                ),
-            ],
-          ),
+          child: _buildChartPanel(state),
         ),
-        const Spacer(),
-        Center(
-          child: Column(
-            children: [
-              Text(
-                _getInternetLabel(state),
-                style: const TextStyle(color: Colors.white70, fontSize: 14),
-              ),
-              _refreshButton(),
-            ],
-          ),
+        const SizedBox(height: 8),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              _getInternetLabel(state),
+              style: const TextStyle(color: Colors.white70, fontSize: 12),
+            ),
+            _refreshButton(compact: true),
+          ],
         ),
       ],
     );
   }
 
-  // ── Shared pieces ─────────────────────────────────────────────────
-
-  Widget _lastUpdateText(MonitorState state) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 20),
-      child: Text(
-        'Last update: ${state.energyData.lastUpdate}',
-        style: AppTextStyles.subtitle,
+  Widget _buildChartPanel(MonitorState state) {
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFF0A0A0A),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white10),
+      ),
+      padding: const EdgeInsets.fromLTRB(8, 8, 8, 4),
+      child: Stack(
+        children: [
+          PowerChart(
+            data: state.powerHistory,
+            chartRange: state.chartRange,
+            showBottomTitles: true,
+          ),
+          if (state.chartLoading)
+            const Positioned.fill(
+              child: Center(
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            ),
+        ],
       ),
     );
   }
+
+  // ── Shared pieces ─────────────────────────────────────────────────
 
   Widget _infoPanel(MonitorState state) {
     return Column(
@@ -372,20 +369,28 @@ class _EnergyMonitorScreenState extends State<EnergyMonitorScreen> {
           value: state.energyData.todaysEnergy,
           icon: Icons.calendar_today,
         ),
-        const SizedBox(height: 40),
-        Center(child: _refreshButton()),
+        const SizedBox(height: 16),
+        Text(
+          _getInternetLabel(state),
+          style: const TextStyle(color: Colors.white60, fontSize: 12),
+        ),
+        const SizedBox(height: 8),
+        _refreshButton(compact: true),
       ],
     );
   }
 
-  Widget _refreshButton() {
-    return Column(
+  Widget _refreshButton({bool compact = false}) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
       children: [
         IconButton(
+          visualDensity: VisualDensity.compact,
           icon: const Icon(Icons.refresh, color: AppColors.label),
           onPressed: widget.controller.refresh,
         ),
-        const Text('Auto-refresh active', style: AppTextStyles.muted),
+        if (!compact)
+          const Text('Auto-refresh active', style: AppTextStyles.muted),
       ],
     );
   }
@@ -405,14 +410,16 @@ class _EnergyMonitorScreenState extends State<EnergyMonitorScreen> {
               labelStyle: TextStyle(
                 color: selected ? Colors.black : Colors.white70,
                 fontWeight: FontWeight.w600,
-                fontSize: 12,
+                fontSize: 10,
               ),
+              labelPadding: const EdgeInsets.symmetric(horizontal: 6),
               selectedColor: AppColors.accent,
               backgroundColor: const Color(0xFF111111),
               side: const BorderSide(color: Colors.white12),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(10),
               ),
+              visualDensity: const VisualDensity(horizontal: -3, vertical: -3),
               materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
             ),
           );
