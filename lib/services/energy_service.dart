@@ -55,8 +55,10 @@ class EnergyService {
         );
       }
 
-      final todaysEnergy = _extractValueRegex(response.body, "Today's Energy");
-      final powerNow = _extractValueRegex(response.body, 'Power Now');
+      final todaysEnergy = _extractValue(response.body,
+          labels: const ["Today's Energy", 'Today']);
+      final powerNow = _extractValue(response.body,
+          labels: const ['Power Now', 'Current Power']);
       final numericPower =
           double.tryParse(powerNow.replaceAll(RegExp(r'[^0-9.]'), ''));
 
@@ -86,16 +88,66 @@ class EnergyService {
     }
   }
 
-  String _extractValueRegex(String html, String keyword) {
-    // Looks for <td>Keyword:</td> then capturing the following <td>content</td>
-    final regex = RegExp('<td>\\s*$keyword:\\s*</td>\\s*<td>(.*?)</td>',
-        caseSensitive: false);
-    final match = regex.firstMatch(html);
-    if (match != null) {
-      final val = match.group(1) ?? 'N/A';
-      return val.trim();
+  String _extractValue(String html, {required List<String> labels}) {
+    final fromTable = _extractFromTableCells(html, labels);
+    if (fromTable != null && fromTable.isNotEmpty) {
+      return fromTable;
     }
+
+    // Fallback for pages that render values in free text or scripts.
+    if (labels.any((l) => l.toLowerCase().contains('power'))) {
+      final power =
+          RegExp(r'([0-9]+(?:\\.[0-9]+)?)\\s*W\\b', caseSensitive: false)
+              .firstMatch(html)
+              ?.group(1);
+      if (power != null) return '$power W';
+    }
+
+    if (labels.any((l) => l.toLowerCase().contains('today'))) {
+      final energy =
+          RegExp(r'([0-9]+(?:\\.[0-9]+)?)\\s*kWh\\b', caseSensitive: false)
+              .firstMatch(html)
+              ?.group(1);
+      if (energy != null) return '$energy kWh';
+    }
+
     return 'N/A';
+  }
+
+  String? _extractFromTableCells(String html, List<String> labels) {
+    final normalizedLabels = labels.map(_normalizeLabel).toSet();
+
+    final cellRegex = RegExp(r'<t[dh][^>]*>(.*?)</t[dh]>',
+        caseSensitive: false, dotAll: true);
+    final cells = cellRegex
+        .allMatches(html)
+        .map((m) => _stripHtml(m.group(1) ?? ''))
+        .where((s) => s.isNotEmpty)
+        .toList();
+
+    for (var i = 0; i < cells.length - 1; i++) {
+      if (normalizedLabels.contains(_normalizeLabel(cells[i]))) {
+        return cells[i + 1];
+      }
+    }
+
+    return null;
+  }
+
+  String _normalizeLabel(String value) {
+    return value
+        .replaceAll(':', '')
+        .replaceAll(RegExp(r'\\s+'), ' ')
+        .trim()
+        .toLowerCase();
+  }
+
+  String _stripHtml(String input) {
+    return input
+        .replaceAll(RegExp(r'<[^>]+>'), ' ')
+        .replaceAll('&nbsp;', ' ')
+        .replaceAll(RegExp(r'\\s+'), ' ')
+        .trim();
   }
 
   void dispose() {

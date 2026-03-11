@@ -21,6 +21,17 @@ void main() {
     </html>
   ''';
 
+  final variantHtml = '''
+    <html>
+      <body>
+        <table>
+          <tr><th>Today</th><td><span>16.2 kWh</span></td></tr>
+          <tr><th>Power Now</th><td><strong>2100 W</strong></td></tr>
+        </table>
+      </body>
+    </html>
+  ''';
+
   group('EnergyService', () {
     test('fetchEnergyData parses HTML correctly on 200 response', () async {
       final mockClient = MockClient((request) async {
@@ -55,6 +66,19 @@ void main() {
           401,
         )),
       );
+    });
+
+    test('fetchEnergyData parses variant monitor table formatting', () async {
+      final mockClient = MockClient((request) async {
+        return http.Response(variantHtml, 200);
+      });
+
+      final service = EnergyService(config: dummyConfig, client: mockClient);
+      final data = await service.fetchEnergyData();
+
+      expect(data.todaysEnergy, '16.2 kWh');
+      expect(data.powerNow, '2100 W');
+      expect(data.latestPowerValue, 2100.0);
     });
 
     test('checkInternetConnectivity returns true on 200 response', () async {
