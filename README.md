@@ -1,16 +1,71 @@
-# solar_power_manager
+# Solar Power Manager
 
-A new Flutter project.
+Solar Power Manager is a Flutter app for monitoring inverter and internet
+connectivity status, and visualizing power trends over time.
 
-## Getting Started
+## Features
 
-This project is a starting point for a Flutter application.
+- Fetches and displays live energy data from a service layer.
+- Shows inverter and internet connection status.
+- Builds a rolling power chart using `fl_chart`.
+- Uses a controller-based architecture to keep UI logic separated.
+- Includes unit and widget tests for core flows.
 
-A few resources to get you started if this is your first Flutter project:
+## Project Structure
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
+- `lib/controllers/`: state management and periodic refresh logic.
+- `lib/models/`: immutable app models.
+- `lib/services/`: data access and external connectivity checks.
+- `lib/screens/`: UI screens.
+- `lib/widgets/`: reusable UI components.
+- `test/`: model, screen, widget, and service tests.
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+## Requirements
+
+- Flutter SDK (stable channel)
+- Dart SDK compatible with `environment.sdk` in `pubspec.yaml`
+
+## Local Development
+
+Install dependencies:
+
+```bash
+flutter pub get
+```
+
+Run the app:
+
+```bash
+flutter run
+```
+
+Run quality checks locally (same intent as CI):
+
+```bash
+dart format --output=none --set-exit-if-changed .
+flutter analyze
+flutter test
+```
+
+## CI
+
+GitHub Actions validates every push/PR on `master` and `main` with:
+
+- formatting verification
+- static analysis
+- test execution
+
+Workflow file: `.github/workflows/ci.yml`
+
+## Release Build
+
+Tag pushes matching `v*` trigger Android APK build workflow.
+
+Workflow file: `.github/workflows/build-release.yml`
+
+## Security and Workflow Hardening
+
+- Actions are pinned to immutable commit SHAs.
+- Workflows use minimal job permissions (`contents: read`).
+- JavaScript actions are opted into Node 24 runtime using
+  `FORCE_JAVASCRIPT_ACTIONS_TO_NODE24=true`.
