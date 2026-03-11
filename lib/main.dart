@@ -35,6 +35,10 @@ void main() async {
     historyService: historyService,
     config: const AppConfig(
       fetchInterval: Duration(seconds: 90),
+      minFetchInterval: Duration(seconds: 45),
+      maxFetchInterval: Duration(minutes: 6),
+      stableDeltaThresholdWatts: 18,
+      stableSamplesForBackoff: 3,
       maxChartPoints: 60,
     ),
   );

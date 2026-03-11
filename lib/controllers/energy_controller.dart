@@ -26,9 +26,14 @@ class EnergyController extends ChangeNotifier {
   double _lastViewportWidth = 0;
   DateTime? _lastStoredSampleAt;
   DateTime? _lastInternetCheckAt;
+  double? _lastPowerReading;
+  Duration _currentFetchInterval = const Duration(seconds: 30);
   int _rangeRequestId = 0;
   bool _hasFreshReading = false;
   int _samplesSincePrune = 0;
+  int _stableSampleStreak = 0;
+  int _errorStreak = 0;
+  bool _isFetching = false;
   bool _started = false;
   bool _disposed = false;
 
@@ -43,10 +48,10 @@ class EnergyController extends ChangeNotifier {
   void start() {
     if (_started || _disposed) return;
     _started = true;
+    _currentFetchInterval = _config.fetchInterval;
 
     unawaited(_loadChartRange(_state.chartRange));
-    unawaited(refresh());
-    _fetchTimer = Timer.periodic(_config.fetchInterval, (_) => refresh());
+    _scheduleNextFetch(immediate: true);
   }
 
   void stop() {
@@ -65,15 +70,23 @@ class EnergyController extends ChangeNotifier {
   }
 
   Future<void> refresh() async {
-    await _fetchEnergy();
+    if (_disposed || !_started || _isFetching) return;
 
-    final now = DateTime.now();
-    final shouldCheckInternet = _lastInternetCheckAt == null ||
-        now.difference(_lastInternetCheckAt!) >= _internetCheckInterval;
+    _isFetching = true;
+    try {
+      await _fetchEnergy();
 
-    if (shouldCheckInternet) {
-      _lastInternetCheckAt = now;
-      await _checkInternet();
+      final now = DateTime.now();
+      final shouldCheckInternet = _lastInternetCheckAt == null ||
+          now.difference(_lastInternetCheckAt!) >= _internetCheckInterval;
+
+      if (shouldCheckInternet) {
+        _lastInternetCheckAt = now;
+        await _checkInternet();
+      }
+    } finally {
+      _isFetching = false;
+      _scheduleNextFetch();
     }
   }
 
@@ -152,6 +165,8 @@ class EnergyController extends ChangeNotifier {
     try {
       final data = await _service.fetchEnergyData();
       _hasFreshReading = data.latestPowerValue != null;
+      _errorStreak = 0;
+      _adjustFetchIntervalForReading(data.latestPowerValue);
       updateState(_state.copyWith(
         energyData: data,
         inverterStatus: ConnectionStatus.connected,
@@ -163,17 +178,80 @@ class EnergyController extends ChangeNotifier {
       _pushChartPoint();
     } on EnergyServiceException catch (e) {
       _hasFreshReading = false;
+      _adjustFetchIntervalForError();
       updateState(_state.copyWith(
         inverterStatus: ConnectionStatus.error,
         errorDetail: e.message,
       ));
     } catch (e) {
       _hasFreshReading = false;
+      _adjustFetchIntervalForError();
       updateState(_state.copyWith(
         inverterStatus: ConnectionStatus.error,
         errorDetail: e.toString(),
       ));
     }
+  }
+
+  void _scheduleNextFetch({bool immediate = false}) {
+    if (_disposed || !_started) return;
+
+    _fetchTimer?.cancel();
+    _fetchTimer = Timer(
+      immediate ? Duration.zero : _currentFetchInterval,
+      () => unawaited(refresh()),
+    );
+  }
+
+  void _adjustFetchIntervalForReading(double? reading) {
+    if (reading == null) {
+      _stableSampleStreak = 0;
+      _currentFetchInterval = _config.fetchInterval;
+      _lastPowerReading = null;
+      return;
+    }
+
+    final previous = _lastPowerReading;
+    _lastPowerReading = reading;
+
+    if (previous == null) {
+      _stableSampleStreak = 0;
+      _currentFetchInterval = _config.fetchInterval;
+      return;
+    }
+
+    final delta = (reading - previous).abs();
+    if (delta <= _config.stableDeltaThresholdWatts) {
+      _stableSampleStreak++;
+    } else {
+      _stableSampleStreak = 0;
+      _currentFetchInterval = _config.minFetchInterval;
+      return;
+    }
+
+    if (_stableSampleStreak >= _config.stableSamplesForBackoff) {
+      final expanded = Duration(
+        milliseconds: (_currentFetchInterval.inMilliseconds * 1.35).round(),
+      );
+      _currentFetchInterval = expanded > _config.maxFetchInterval
+          ? _config.maxFetchInterval
+          : expanded;
+    } else {
+      _currentFetchInterval = _config.fetchInterval;
+    }
+  }
+
+  void _adjustFetchIntervalForError() {
+    _errorStreak++;
+    _stableSampleStreak = 0;
+
+    final multiplier = _errorStreak < 4 ? _errorStreak + 1 : 4;
+    final expanded = Duration(
+      milliseconds: _config.fetchInterval.inMilliseconds * multiplier,
+    );
+    _currentFetchInterval = expanded > _config.maxFetchInterval
+        ? _config.maxFetchInterval
+        : expanded;
   }
 
   Future<void> _checkInternet() async {
