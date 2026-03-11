@@ -1,0 +1,45 @@
+name: Auto Tag Version
+
+on:
+  push:
+    branches: ["master", "main"]
+
+jobs:
+  tag:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+        with:
+          fetch-depth: 0
+
+      - name: Create next semantic tag
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          git fetch --tags --force
+
+          # If this commit is already tagged with a semantic version, do nothing.
+          if git tag --points-at "$GITHUB_SHA" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "Commit already has a version tag. Skipping."
+            exit 0
+          fi
+
+          latest_tag="$(git tag -l 'v*' --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -n 1 || true)"
+
+          if [[ -z "$latest_tag" ]]; then
+            next_tag="v1.0.0"
+          else
+            version="${latest_tag#v}"
+            IFS='.' read -r major minor patch <<< "$version"
+            next_patch=$((patch + 1))
+            next_tag="v${major}.${minor}.${next_patch}"
+          fi
+
+          git tag -a "$next_tag" -m "Release $next_tag" "$GITHUB_SHA"
+          git push origin "$next_tag"
+
+          echo "Created and pushed tag: $next_tag"
