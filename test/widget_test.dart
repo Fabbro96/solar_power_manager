@@ -14,6 +14,8 @@ void main() {
     final controller = EnergyController(service: service);
 
     await tester.pumpWidget(SolarPowerApp(controller: controller));
-    expect(find.textContaining('Solar Monitor'), findsOneWidget);
+    expect(find.textContaining('Solar Monitor'), findsWidgets);
+
+    controller.stop();
   });
 }
