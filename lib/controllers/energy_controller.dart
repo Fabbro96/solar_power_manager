@@ -9,7 +9,6 @@ import '../services/energy_service.dart';
 import '../services/power_history_service.dart';
 
 class EnergyController extends ChangeNotifier {
-  static const int _maxVisiblePoints = 480;
   static const int _pruneEverySamples = 24;
   static const Duration _internetCheckInterval = Duration(minutes: 5);
 
@@ -217,9 +216,11 @@ class EnergyController extends ChangeNotifier {
         return;
       }
 
-      _powerHistory = _downsample(
-        List.of(_powerHistory)..add(sample),
-        maxPoints: _maxVisiblePoints,
+      _powerHistory = _appendWithinRangeAndCap(
+        existing: _powerHistory,
+        sample: sample,
+        cutoff: cutoff,
+        maxPoints: _config.maxChartPoints,
       );
 
       updateState(_state.copyWith(powerHistory: _powerHistory));
@@ -239,7 +240,7 @@ class EnergyController extends ChangeNotifier {
           const <PowerSample>[];
       if (requestId != _rangeRequestId) return;
 
-      _powerHistory = _downsample(loaded, maxPoints: _maxVisiblePoints);
+      _powerHistory = _downsample(loaded, maxPoints: _config.maxChartPoints);
       _lastStoredSampleAt = loaded.isNotEmpty ? loaded.last.timestamp : null;
       updateState(_state.copyWith(
         chartRange: range,
@@ -288,6 +289,20 @@ class EnergyController extends ChangeNotifier {
     }
 
     return result;
+  }
+
+  List<PowerSample> _appendWithinRangeAndCap({
+    required List<PowerSample> existing,
+    required PowerSample sample,
+    required DateTime cutoff,
+    required int maxPoints,
+  }) {
+    final filtered = existing.where((s) => !s.timestamp.isBefore(cutoff));
+    final next = List<PowerSample>.of(filtered, growable: true)..add(sample);
+    if (next.length <= maxPoints) {
+      return next;
+    }
+    return next.sublist(next.length - maxPoints);
   }
 }
 

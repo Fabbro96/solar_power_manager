@@ -21,7 +21,8 @@ class PowerChart extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final spots = _spots;
+        final metrics = _computeMetrics(data);
+        final spots = metrics.spots;
         final hasData = spots.isNotEmpty;
         final chartWidth = constraints.maxWidth.isFinite
             ? constraints.maxWidth
@@ -35,15 +36,15 @@ class PowerChart extends StatelessWidget {
                 backgroundColor: AppColors.background,
                 minX: hasData ? spots.first.x : 0,
                 maxX: hasData ? spots.last.x : 1,
-                minY: _minY,
-                maxY: _maxY,
-                gridData: _buildGridData(spots, xInterval),
-                titlesData: _buildTitlesData(spots, xInterval),
+                minY: metrics.minY,
+                maxY: metrics.maxY,
+                gridData: _buildGridData(xInterval, metrics.yAxisInterval),
+                titlesData: _buildTitlesData(spots, xInterval, metrics),
                 borderData: FlBorderData(
                   show: true,
                   border: Border.all(color: Colors.white12),
                 ),
-                extraLinesData: _buildReferenceLines(),
+                extraLinesData: _buildReferenceLines(metrics),
                 lineTouchData: _buildTouchData(spots),
                 lineBarsData: [_buildLineData(spots)],
               ),
@@ -63,9 +64,7 @@ class PowerChart extends StatelessWidget {
     );
   }
 
-  FlGridData _buildGridData(List<FlSpot> spots, double xInterval) {
-    final yInterval = _yAxisInterval;
-
+  FlGridData _buildGridData(double xInterval, double yInterval) {
     return FlGridData(
       show: true,
       drawVerticalLine: showBottomTitles,
@@ -85,7 +84,11 @@ class PowerChart extends StatelessWidget {
     );
   }
 
-  FlTitlesData _buildTitlesData(List<FlSpot> spots, double xInterval) {
+  FlTitlesData _buildTitlesData(
+    List<FlSpot> spots,
+    double xInterval,
+    _ChartMetrics metrics,
+  ) {
     return FlTitlesData(
       bottomTitles: AxisTitles(
         sideTitles: SideTitles(
@@ -98,7 +101,7 @@ class PowerChart extends StatelessWidget {
       leftTitles: AxisTitles(
         sideTitles: SideTitles(
           showTitles: true,
-          interval: _yAxisInterval,
+          interval: metrics.yAxisInterval,
           reservedSize: 48,
           getTitlesWidget: (value, meta) {
             if (spots.isEmpty) return const Text('');
@@ -190,13 +193,13 @@ class PowerChart extends StatelessWidget {
     );
   }
 
-  ExtraLinesData _buildReferenceLines() {
-    if (data.length < 2) {
+  ExtraLinesData _buildReferenceLines(_ChartMetrics metrics) {
+    if (metrics.spots.length < 2) {
       return const ExtraLinesData(horizontalLines: []);
     }
 
-    final avg = data.map((s) => s.watts).reduce((a, b) => a + b) / data.length;
-    final max = data.map((s) => s.watts).reduce((a, b) => a > b ? a : b);
+    final avg = metrics.avg;
+    final max = metrics.max;
 
     return ExtraLinesData(
       horizontalLines: [
@@ -238,18 +241,6 @@ class PowerChart extends StatelessWidget {
     );
   }
 
-  List<FlSpot> get _spots {
-    if (data.isEmpty) return const [];
-    return List<FlSpot>.generate(
-      data.length,
-      (index) => FlSpot(
-        data[index].timestamp.millisecondsSinceEpoch / 1000,
-        data[index].watts,
-      ),
-      growable: false,
-    );
-  }
-
   double _xIntervalForWidth(double chartWidth) {
     if (data.length <= 1) return 10;
     final first = data.first.timestamp.millisecondsSinceEpoch / 1000;
@@ -284,26 +275,83 @@ class PowerChart extends StatelessWidget {
     }
   }
 
-  double get _yAxisInterval {
-    if (data.isEmpty) return 100;
-    final maxY = data.map((s) => s.watts).reduce((a, b) => a > b ? a : b);
-    if (maxY < 500) return 100;
-    if (maxY < 1000) return 200;
-    if (maxY < 2000) return 500;
-    if (maxY < 5000) return 1000;
-    return 2000;
-  }
+  _ChartMetrics _computeMetrics(List<PowerSample> samples) {
+    if (samples.isEmpty) {
+      return const _ChartMetrics(
+        spots: <FlSpot>[],
+        min: 0,
+        max: 0,
+        avg: 0,
+        minY: 0,
+        maxY: 1000,
+        yAxisInterval: 100,
+      );
+    }
 
-  double get _minY {
-    if (data.isEmpty) return 0;
-    final min = data.map((s) => s.watts).reduce((a, b) => a < b ? a : b);
-    final padded = min - (min * 0.15);
-    return padded < 0 ? 0 : padded;
-  }
+    var min = samples.first.watts;
+    var max = samples.first.watts;
+    var total = 0.0;
+    final spots = List<FlSpot>.generate(
+      samples.length,
+      (index) {
+        final watts = samples[index].watts;
+        if (watts < min) min = watts;
+        if (watts > max) max = watts;
+        total += watts;
+        return FlSpot(
+          samples[index].timestamp.millisecondsSinceEpoch / 1000,
+          watts,
+        );
+      },
+      growable: false,
+    );
 
-  double get _maxY {
-    if (data.isEmpty) return 1000;
-    final max = data.map((s) => s.watts).reduce((a, b) => a > b ? a : b);
-    return max + (max * 0.12) + 40;
+    final avg = total / samples.length;
+    final paddedMin = min - (min * 0.15);
+    final minY = paddedMin < 0 ? 0.0 : paddedMin;
+    final maxY = max + (max * 0.12) + 40.0;
+
+    double interval;
+    if (max < 500) {
+      interval = 100;
+    } else if (max < 1000) {
+      interval = 200;
+    } else if (max < 2000) {
+      interval = 500;
+    } else if (max < 5000) {
+      interval = 1000;
+    } else {
+      interval = 2000;
+    }
+
+    return _ChartMetrics(
+      spots: spots,
+      min: min,
+      max: max,
+      avg: avg,
+      minY: minY,
+      maxY: maxY,
+      yAxisInterval: interval,
+    );
   }
+}
+
+class _ChartMetrics {
+  final List<FlSpot> spots;
+  final double min;
+  final double max;
+  final double avg;
+  final double minY;
+  final double maxY;
+  final double yAxisInterval;
+
+  const _ChartMetrics({
+    required this.spots,
+    required this.min,
+    required this.max,
+    required this.avg,
+    required this.minY,
+    required this.maxY,
+    required this.yAxisInterval,
+  });
 }
