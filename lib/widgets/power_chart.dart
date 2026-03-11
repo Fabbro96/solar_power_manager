@@ -37,7 +37,7 @@ class PowerChart extends StatelessWidget {
               show: true,
               border: Border.all(color: Colors.white12),
             ),
-            extraLinesData: _buildAverageLine(),
+            extraLinesData: _buildReferenceLines(),
             lineTouchData: _buildTouchData(spots),
             lineBarsData: [_buildLineData(spots)],
           ),
@@ -181,12 +181,13 @@ class PowerChart extends StatelessWidget {
     );
   }
 
-  ExtraLinesData _buildAverageLine() {
+  ExtraLinesData _buildReferenceLines() {
     if (data.length < 2) {
       return const ExtraLinesData(horizontalLines: []);
     }
 
     final avg = data.map((s) => s.watts).reduce((a, b) => a + b) / data.length;
+    final max = data.map((s) => s.watts).reduce((a, b) => a > b ? a : b);
 
     return ExtraLinesData(
       horizontalLines: [
@@ -205,6 +206,23 @@ class PowerChart extends StatelessWidget {
               fontWeight: FontWeight.w600,
             ),
             labelResolver: (_) => 'AVG ${avg.toStringAsFixed(0)} W',
+          ),
+        ),
+        HorizontalLine(
+          y: max,
+          color: const Color(0xFFFF6B6B).withAlpha(190),
+          strokeWidth: 1.2,
+          dashArray: const [3, 4],
+          label: HorizontalLineLabel(
+            show: true,
+            alignment: Alignment.topLeft,
+            padding: const EdgeInsets.only(left: 6),
+            style: const TextStyle(
+              color: Color(0xFFFF8A8A),
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+            ),
+            labelResolver: (_) => 'MAX ${max.toStringAsFixed(0)} W',
           ),
         ),
       ],

@@ -80,4 +80,20 @@ class MonitorState {
     final total = powerHistory.fold<double>(0, (sum, s) => sum + s.watts);
     return total / powerHistory.length;
   }
+
+  double? get currentPower => energyData.latestPowerValue;
+
+  double? get deltaVsAverage {
+    final current = currentPower;
+    final avg = avgPower;
+    if (current == null || avg == null) return null;
+    return current - avg;
+  }
+
+  double? get percentVsAverage {
+    final delta = deltaVsAverage;
+    final avg = avgPower;
+    if (delta == null || avg == null || avg == 0) return null;
+    return (delta / avg) * 100;
+  }
 }

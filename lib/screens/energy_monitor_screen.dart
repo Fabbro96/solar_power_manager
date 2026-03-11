@@ -250,6 +250,8 @@ class _EnergyMonitorScreenState extends State<EnergyMonitorScreen> {
                     children: [
                       _rangeSelector(state),
                       const SizedBox(height: 8),
+                      _chartStats(state),
+                      const SizedBox(height: 8),
                       Expanded(
                         child: Stack(
                           children: [
@@ -430,7 +432,53 @@ class _EnergyMonitorScreenState extends State<EnergyMonitorScreen> {
         _statChip('AVG', format(state.avgPower)),
         _statChip('MAX', format(state.maxPower)),
         _statChip('SAMPLES', '${state.powerHistory.length}'),
+        _vsAvgChip(state),
       ],
+    );
+  }
+
+  Widget _vsAvgChip(MonitorState state) {
+    final delta = state.deltaVsAverage;
+    final percent = state.percentVsAverage;
+
+    if (delta == null || percent == null) {
+      return _statChip('NOW vs AVG', '--');
+    }
+
+    final sign = delta >= 0 ? '+' : '';
+    final color =
+        delta >= 0 ? const Color(0xFF66E4A8) : const Color(0xFFFF8A8A);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: const Color(0xFF0D0D0D),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: color.withAlpha(120)),
+      ),
+      child: RichText(
+        text: TextSpan(
+          children: [
+            const TextSpan(
+              text: 'NOW vs AVG ',
+              style: TextStyle(
+                color: Colors.white54,
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            TextSpan(
+              text:
+                  '$sign${delta.toStringAsFixed(0)} W ($sign${percent.toStringAsFixed(1)}%)',
+              style: TextStyle(
+                color: color,
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
