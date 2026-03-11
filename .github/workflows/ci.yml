@@ -69,13 +69,26 @@ jobs:
 
       - name: Publish APK to latest prerelease
         if: github.event_name == 'push'
-        uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b # v2
-        with:
-          tag_name: latest-apk
-          name: Latest APK
-          prerelease: true
-          target_commitish: ${{ github.sha }}
-          body: |
-            Automated APK build from `${{ github.ref_name }}`.
-            Commit: `${{ github.sha }}`
-          files: ${{ steps.locate_apk.outputs.apk_path }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          APK_PATH: ${{ steps.locate_apk.outputs.apk_path }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          NOTES="Automated APK build from ${GITHUB_REF_NAME}.\nCommit: ${GITHUB_SHA}"
+
+          if gh release view latest-apk >/dev/null 2>&1; then
+            gh release upload latest-apk "$APK_PATH" --clobber
+            gh release edit latest-apk \
+              --title "Latest APK" \
+              --prerelease \
+              --target "$GITHUB_SHA" \
+              --notes "$NOTES"
+          else
+            gh release create latest-apk "$APK_PATH" \
+              --title "Latest APK" \
+              --prerelease \
+              --target "$GITHUB_SHA" \
+              --notes "$NOTES"
+          fi
