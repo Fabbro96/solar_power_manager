@@ -79,8 +79,10 @@ class EnergyController extends ChangeNotifier {
   Future<void> _checkInternet() async {
     try {
       final ok = await _service.checkInternetConnectivity();
+      final internetStatus =
+          ok ? ConnectionStatus.connected : ConnectionStatus.error;
       updateState(_state.copyWith(
-        internetStatus: ok ? ConnectionStatus.connected : ConnectionStatus.error,
+        internetStatus: internetStatus,
       ));
     } catch (e) {
       updateState(_state.copyWith(
