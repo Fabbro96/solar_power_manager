@@ -5,55 +5,59 @@ import 'config/app_config.dart';
 import 'controllers/energy_controller.dart';
 import 'screens/energy_monitor_screen.dart';
 import 'services/energy_service.dart';
+import 'services/settings_service.dart';
 import 'theme/app_theme.dart';
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  SystemChrome.setPreferredOrientations([
+
+  final settings = await SettingsService.create();
+
+  await SystemChrome.setPreferredOrientations([
     DeviceOrientation.landscapeRight,
     DeviceOrientation.landscapeLeft,
     DeviceOrientation.portraitUp,
     DeviceOrientation.portraitDown,
-  ]).then((_) {
-    // 1. App Configuration (can be loaded from env vars or remote config later)
-    const config = AppConfig(
-      inverterUrl: 'http://192.168.1.16/monitor.htm',
-      username: 'admin',
-      password: 'admin',
+  ]);
+
+  final energyService = EnergyService(
+    config: EnergyServiceConfig(
+      url: settings.inverterUrl,
+      username: settings.username,
+      password: settings.password,
+    ),
+  );
+
+  final controller = EnergyController(
+    service: energyService,
+    config: const AppConfig(
       fetchInterval: Duration(seconds: 30),
       maxChartPoints: 60,
-    );
+    ),
+  );
 
-    // 2. Services Initialization
-    final energyService = EnergyService(
-      config: EnergyServiceConfig(
-        url: config.inverterUrl,
-        username: config.username,
-        password: config.password,
-      ),
-    );
-
-    // 3. Controller (State Management) initialization
-    final controller = EnergyController(
-      service: energyService,
-      config: config,
-    );
-
-    runApp(SolarPowerApp(controller: controller));
-  });
+  runApp(SolarPowerApp(controller: controller, settings: settings));
 }
 
 class SolarPowerApp extends StatelessWidget {
   final EnergyController controller;
+  final SettingsService? settings;
 
-  const SolarPowerApp({super.key, required this.controller});
+  const SolarPowerApp({
+    super.key,
+    required this.controller,
+    this.settings,
+  });
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Solar Power Manager',
       theme: buildAppTheme(),
-      home: EnergyMonitorScreen(controller: controller),
+      home: EnergyMonitorScreen(
+        controller: controller,
+        onIpSaved: settings?.setInverterIp,
+      ),
     );
   }
 }

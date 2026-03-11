@@ -18,11 +18,25 @@ class EnergyServiceConfig {
 }
 
 class EnergyService {
-  final EnergyServiceConfig config;
+  EnergyServiceConfig _config;
   final http.Client _client;
 
-  EnergyService({required this.config, http.Client? client})
-      : _client = client ?? http.Client();
+  EnergyService({required EnergyServiceConfig config, http.Client? client})
+      : _config = config,
+        _client = client ?? http.Client();
+
+  EnergyServiceConfig get config => _config;
+
+  /// Swaps only the host of the URL, keeping path and credentials intact.
+  void updateInverterIp(String newIp) {
+    final uri = Uri.parse(_config.url);
+    final newUrl = uri.replace(host: newIp).toString();
+    _config = EnergyServiceConfig(
+      url: newUrl,
+      username: _config.username,
+      password: _config.password,
+    );
+  }
 
   Future<EnergyData> fetchEnergyData() async {
     try {

@@ -50,6 +50,19 @@ class EnergyController extends ChangeNotifier {
     await Future.wait([_fetchEnergy(), _checkInternet()]);
   }
 
+  String get currentInverterIp {
+    final uri = Uri.tryParse(_service.config.url);
+    return uri?.host ?? '';
+  }
+
+  Future<void> updateInverterIp(String newIp) async {
+    _service.updateInverterIp(newIp);
+    _state = const MonitorState();
+    notifyListeners();
+    stop();
+    start();
+  }
+
   void updateState(MonitorState newState) {
     _state = newState;
     notifyListeners();

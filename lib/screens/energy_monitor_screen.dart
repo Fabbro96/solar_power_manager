@@ -9,7 +9,14 @@ import '../widgets/power_chart.dart';
 class EnergyMonitorScreen extends StatefulWidget {
   final EnergyController controller;
 
-  const EnergyMonitorScreen({super.key, required this.controller});
+  /// Called after a new IP is validated and applied — used to persist it.
+  final Future<void> Function(String)? onIpSaved;
+
+  const EnergyMonitorScreen({
+    super.key,
+    required this.controller,
+    this.onIpSaved,
+  });
 
   @override
   State<EnergyMonitorScreen> createState() => _EnergyMonitorScreenState();
@@ -24,13 +31,11 @@ class _EnergyMonitorScreenState extends State<EnergyMonitorScreen> {
 
   @override
   void dispose() {
-    // Only stop the internal timers but do not dispose the controller here
-    // unless this screen inherently "owns" it. For now, just stop its background ops.
     widget.controller.stop();
     super.dispose();
   }
 
-  // ── UI ────────────────────────────────────────────────────────────
+  // ── Helpers ───────────────────────────────────────────────────────
 
   String _getAppBarTitle(MonitorState state) {
     if (state.inverterStatus == ConnectionStatus.connected) {
@@ -53,6 +58,102 @@ class _EnergyMonitorScreenState extends State<EnergyMonitorScreen> {
     }
   }
 
+  // ── IP warning ────────────────────────────────────────────────────
+
+  /// Show the warning banner when there is no usable data or a connection
+  /// error — both conditions usually mean the inverter IP is wrong.
+  bool _shouldWarnAboutIp(MonitorState state) {
+    if (state.inverterStatus == ConnectionStatus.checking) return false;
+    if (state.inverterStatus == ConnectionStatus.error) return true;
+    return state.energyData.todaysEnergy == 'N/A' &&
+        state.energyData.powerNow == 'N/A';
+  }
+
+  // ── IP Settings dialog ────────────────────────────────────────────
+
+  Future<void> _showIpDialog(BuildContext context) async {
+    final current = widget.controller.currentInverterIp;
+    final ipController = TextEditingController(text: current);
+    String? errorText;
+
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          backgroundColor: const Color(0xFF111111),
+          title: const Text(
+            'Inverter IP address',
+            style: TextStyle(color: Colors.white70),
+          ),
+          content: TextField(
+            controller: ipController,
+            autofocus: true,
+            keyboardType: TextInputType.number,
+            style: const TextStyle(color: Colors.white),
+            decoration: InputDecoration(
+              labelText: 'IP address',
+              labelStyle: const TextStyle(color: Colors.white54),
+              hintText: '192.168.x.x',
+              hintStyle: const TextStyle(color: Colors.white24),
+              errorText: errorText,
+              enabledBorder: const UnderlineInputBorder(
+                borderSide: BorderSide(color: Colors.white24),
+              ),
+              focusedBorder: UnderlineInputBorder(
+                borderSide: BorderSide(color: AppColors.primary),
+              ),
+            ),
+            onChanged: (_) {
+              if (errorText != null) setDialogState(() => errorText = null);
+            },
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text(
+                'Cancel',
+                style: TextStyle(color: Colors.white54),
+              ),
+            ),
+            TextButton(
+              onPressed: () async {
+                final ip = ipController.text.trim();
+                if (ip.isEmpty) {
+                  setDialogState(() => errorText = 'Enter an IP address');
+                  return;
+                }
+                if (!_isValidIp(ip)) {
+                  setDialogState(() => errorText = 'Invalid IP address');
+                  return;
+                }
+                Navigator.pop(ctx);
+                await widget.controller.updateInverterIp(ip);
+                await widget.onIpSaved?.call(ip);
+              },
+              child: Text(
+                'Save',
+                style: TextStyle(color: AppColors.primary),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    ipController.dispose();
+  }
+
+  static bool _isValidIp(String ip) {
+    final parts = ip.split('.');
+    if (parts.length != 4) return false;
+    return parts.every((p) {
+      final n = int.tryParse(p);
+      return n != null && n >= 0 && n <= 255;
+    });
+  }
+
+  // ── Build ─────────────────────────────────────────────────────────
+
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
@@ -60,18 +161,70 @@ class _EnergyMonitorScreenState extends State<EnergyMonitorScreen> {
       builder: (context, _) {
         final state = widget.controller.state;
         return Scaffold(
-          appBar: AppBar(title: Text(_getAppBarTitle(state))),
-          body: LayoutBuilder(
-            builder: (context, constraints) {
-              final isLandscape = constraints.maxWidth > constraints.maxHeight;
-              return Padding(
-                padding: const EdgeInsets.all(20),
-                child: isLandscape
-                    ? _buildLandscape(constraints, state)
-                    : _buildPortrait(state),
-              );
-            },
+          appBar: AppBar(
+            title: Text(_getAppBarTitle(state)),
+            actions: [
+              IconButton(
+                tooltip: 'Change inverter IP',
+                icon: const Icon(
+                  Icons.settings_ethernet,
+                  color: Colors.white54,
+                ),
+                onPressed: () => _showIpDialog(context),
+              ),
+            ],
           ),
+          body: Column(
+            children: [
+              if (_shouldWarnAboutIp(state)) _buildIpWarning(context, state),
+              Expanded(child: _buildBody(state)),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildIpWarning(BuildContext context, MonitorState state) {
+    final reason = state.inverterStatus == ConnectionStatus.error
+        ? (state.errorDetail ?? 'Connection error')
+        : 'Inverter returned no data';
+    return Container(
+      width: double.infinity,
+      color: Colors.orange.withAlpha(30),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      child: Row(
+        children: [
+          const Icon(Icons.warning_amber_rounded,
+              color: Colors.orange, size: 18),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              '$reason — check the inverter IP address.',
+              style: const TextStyle(color: Colors.orange, fontSize: 13),
+            ),
+          ),
+          TextButton(
+            onPressed: () => _showIpDialog(context),
+            child: const Text(
+              'Change IP',
+              style: TextStyle(color: Colors.orange, fontSize: 13),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBody(MonitorState state) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isLandscape = constraints.maxWidth > constraints.maxHeight;
+        return Padding(
+          padding: const EdgeInsets.all(20),
+          child: isLandscape
+              ? _buildLandscape(constraints, state)
+              : _buildPortrait(state),
         );
       },
     );
@@ -137,8 +290,10 @@ class _EnergyMonitorScreenState extends State<EnergyMonitorScreen> {
         Center(
           child: Column(
             children: [
-              Text(_getInternetLabel(state),
-                  style: const TextStyle(color: Colors.white70, fontSize: 14)),
+              Text(
+                _getInternetLabel(state),
+                style: const TextStyle(color: Colors.white70, fontSize: 14),
+              ),
               _refreshButton(),
             ],
           ),

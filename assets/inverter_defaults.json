@@ -1,0 +1,6 @@
+{
+  "username": "admin",
+  "password": "admin",
+  "inverter_path": "/monitor.htm",
+  "default_ip": "192.168.1.16"
+}
