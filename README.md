@@ -24,6 +24,7 @@ connectivity status, and visualizing power trends over time.
 
 - Flutter SDK (stable channel)
 - Dart SDK compatible with `environment.sdk` in `pubspec.yaml`
+- Android package id: `com.fabbro.solarpowermanager`
 
 ## Local Development
 
@@ -54,15 +55,16 @@ GitHub Actions validates every push/PR on `master` and `main` with:
 - formatting verification
 - static analysis
 - test execution
-- APK build and upload as a workflow artifact on every `push`
+- APK build on every `push`
+- APK uploaded as workflow artifact
+- APK published to a rolling prerelease (`latest-apk`) for quick download
 
 Workflow file: `.github/workflows/ci.yml`
 
 To download the APK after a push:
 
-1. Open the latest successful CI run in GitHub Actions.
-2. Open the `Artifacts` section.
-3. Download `app-release-apk-<commit-sha>`.
+1. Open `Releases` and download assets from `Latest APK` (tag: `latest-apk`).
+2. Or open the CI run `Artifacts` section and download `solar-power-manager-apk-<commit-sha>`.
 
 ## Release Build
 

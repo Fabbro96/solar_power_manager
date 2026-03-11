@@ -10,7 +10,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
 
@@ -43,6 +43,19 @@ jobs:
         if: github.event_name == 'push'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: app-release-apk-${{ github.sha }}
-          path: build/app/outputs/flutter-apk/app-release.apk
+          name: solar-power-manager-apk-${{ github.sha }}
+          path: build/app/outputs/flutter-apk/solar-power-manager-*-release.apk
           if-no-files-found: error
+
+      - name: Publish APK to latest prerelease
+        if: github.event_name == 'push'
+        uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b # v2
+        with:
+          tag_name: latest-apk
+          name: Latest APK
+          prerelease: true
+          target_commitish: ${{ github.sha }}
+          body: |
+            Automated APK build from `${{ github.ref_name }}`.
+            Commit: `${{ github.sha }}`
+          files: build/app/outputs/flutter-apk/solar-power-manager-*-release.apk

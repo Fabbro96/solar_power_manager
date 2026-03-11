@@ -1,4 +1,4 @@
-package com.example.solar_power_manager
+package com.fabbro.solarpowermanager
 
 import io.flutter.embedding.android.FlutterActivity
 
