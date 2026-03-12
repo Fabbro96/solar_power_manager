@@ -40,10 +40,16 @@ class SettingsService {
         'Ensure the asset exists and is valid JSON.',
       );
     }
-    final requiredKeys = ['default_ip', 'inverter_path', 'username', 'password'];
+    final requiredKeys = [
+      'default_ip',
+      'inverter_path',
+      'username',
+      'password'
+    ];
     for (final key in requiredKeys) {
       if (!defaults.containsKey(key)) {
-        throw StateError('inverter_defaults.json is missing required key: "$key"');
+        throw StateError(
+            'inverter_defaults.json is missing required key: "$key"');
       }
     }
     return SettingsService._(
