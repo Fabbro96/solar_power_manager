@@ -1,3 +1,5 @@
+import com.android.build.OutputFile
+
 plugins {
     id "com.android.application"
     id "kotlin-android"
@@ -42,8 +44,10 @@ android {
 
     applicationVariants.all { variant ->
         variant.outputs.all { output ->
+            def abi = output.getFilter(OutputFile.ABI)
+            def abiSuffix = abi != null ? "-${abi}" : ""
             output.outputFileName =
-                    "solar-power-manager-${variant.versionName}-${variant.buildType.name}.apk"
+                    "solar-power-manager${abiSuffix}-${variant.versionName}-${variant.buildType.name}.apk"
         }
     }
 
