@@ -46,6 +46,10 @@ android {
                     "solar-power-manager-${variant.versionName}-${variant.buildType.name}.apk"
         }
     }
+
+    packagingOptions {
+        pickFirst 'META-INF/com/android/build/gradle/app-metadata.properties'
+    }
 }
 
 flutter {
