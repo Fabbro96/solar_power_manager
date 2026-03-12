@@ -16,6 +16,6 @@ void main() {
     await tester.pumpWidget(SolarPowerApp(controller: controller));
     expect(find.textContaining('Solar Monitor'), findsWidgets);
 
-    controller.stop();
+    controller.dispose();
   });
 }

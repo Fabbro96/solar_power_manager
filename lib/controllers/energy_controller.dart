@@ -29,6 +29,7 @@ class EnergyController extends ChangeNotifier {
   double? _lastPowerReading;
   Duration _currentFetchInterval = const Duration(seconds: 30);
   int _rangeRequestId = 0;
+  int _fetchGeneration = 0;
   bool _hasFreshReading = false;
   int _samplesSincePrune = 0;
   int _stableSampleStreak = 0;
@@ -73,8 +74,11 @@ class EnergyController extends ChangeNotifier {
     if (_disposed || !_started || _isFetching) return;
 
     _isFetching = true;
+    final gen = _fetchGeneration;
     try {
       await _fetchEnergy();
+
+      if (gen != _fetchGeneration || _disposed || !_started) return;
 
       final now = DateTime.now();
       final shouldCheckInternet = _lastInternetCheckAt == null ||
@@ -86,7 +90,9 @@ class EnergyController extends ChangeNotifier {
       }
     } finally {
       _isFetching = false;
-      _scheduleNextFetch();
+      if (gen == _fetchGeneration) {
+        _scheduleNextFetch();
+      }
     }
   }
 
@@ -96,6 +102,8 @@ class EnergyController extends ChangeNotifier {
   }
 
   Future<void> updateInverterIp(String newIp) async {
+    _fetchGeneration++;
+    _isFetching = false;
     final previousRange = _state.chartRange;
     _service.updateInverterIp(newIp);
     _powerHistory = [];
@@ -162,8 +170,11 @@ class EnergyController extends ChangeNotifier {
   }
 
   Future<void> _fetchEnergy() async {
+    final gen = _fetchGeneration;
     try {
       final data = await _service.fetchEnergyData();
+      if (gen != _fetchGeneration || _disposed) return;
+
       _hasFreshReading = data.latestPowerValue != null;
       _errorStreak = 0;
       _adjustFetchIntervalForReading(data.latestPowerValue);
@@ -177,6 +188,7 @@ class EnergyController extends ChangeNotifier {
       // and does not depend on timer alignment.
       _pushChartPoint();
     } on EnergyServiceException catch (e) {
+      if (gen != _fetchGeneration || _disposed) return;
       _hasFreshReading = false;
       _adjustFetchIntervalForError();
       updateState(_state.copyWith(
@@ -184,6 +196,7 @@ class EnergyController extends ChangeNotifier {
         errorDetail: e.message,
       ));
     } catch (e) {
+      if (gen != _fetchGeneration || _disposed) return;
       _hasFreshReading = false;
       _adjustFetchIntervalForError();
       updateState(_state.copyWith(
@@ -257,12 +270,14 @@ class EnergyController extends ChangeNotifier {
   Future<void> _checkInternet() async {
     try {
       final ok = await _service.checkInternetConnectivity();
+      if (_disposed) return;
       final internetStatus =
           ok ? ConnectionStatus.connected : ConnectionStatus.error;
       updateState(_state.copyWith(
         internetStatus: internetStatus,
       ));
     } catch (e) {
+      if (_disposed) return;
       updateState(_state.copyWith(
         internetStatus: ConnectionStatus.error,
         errorDetail: 'Internet check failed: ${e.toString()}',
@@ -316,7 +331,7 @@ class EnergyController extends ChangeNotifier {
     try {
       final loaded = await _historyService?.loadRange(range: range) ??
           const <PowerSample>[];
-      if (requestId != _rangeRequestId) return;
+      if (requestId != _rangeRequestId || _disposed) return;
 
       _powerHistory = _downsample(loaded, maxPoints: _config.maxChartPoints);
       _lastStoredSampleAt = loaded.isNotEmpty ? loaded.last.timestamp : null;
@@ -326,7 +341,7 @@ class EnergyController extends ChangeNotifier {
         powerHistory: _powerHistory,
       ));
     } catch (e) {
-      if (requestId != _rangeRequestId) return;
+      if (requestId != _rangeRequestId || _disposed) return;
 
       updateState(_state.copyWith(
         chartRange: range,
@@ -339,6 +354,7 @@ class EnergyController extends ChangeNotifier {
   Future<void> _persistSample(PowerSample sample) async {
     try {
       await _historyService?.insertSample(sample);
+      if (_disposed) return;
       _samplesSincePrune++;
       if (_samplesSincePrune >= _pruneEverySamples) {
         _samplesSincePrune = 0;
@@ -356,7 +372,7 @@ class EnergyController extends ChangeNotifier {
     List<PowerSample> samples, {
     required int maxPoints,
   }) {
-    if (samples.length <= maxPoints) return samples;
+    if (maxPoints <= 1 || samples.length <= maxPoints) return samples;
 
     final result = <PowerSample>[];
     final step = (samples.length - 1) / (maxPoints - 1);

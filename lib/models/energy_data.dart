@@ -45,11 +45,16 @@ class MonitorState {
     this.chartLoading = false,
   });
 
+  // Sentinel used to distinguish "not provided" from "explicitly set to null"
+  // in [copyWith]. Without this, `copyWith(errorDetail: null)` would keep the
+  // old value due to `??`, making it impossible to clear an error.
+  static const _sentinel = Object();
+
   MonitorState copyWith({
     EnergyData? energyData,
     ConnectionStatus? inverterStatus,
     ConnectionStatus? internetStatus,
-    String? errorDetail,
+    Object? errorDetail = _sentinel,
     List<PowerSample>? powerHistory,
     ChartRange? chartRange,
     bool? chartLoading,
@@ -58,7 +63,9 @@ class MonitorState {
       energyData: energyData ?? this.energyData,
       inverterStatus: inverterStatus ?? this.inverterStatus,
       internetStatus: internetStatus ?? this.internetStatus,
-      errorDetail: errorDetail ?? this.errorDetail,
+      errorDetail: identical(errorDetail, _sentinel)
+          ? this.errorDetail
+          : errorDetail as String?,
       powerHistory: powerHistory ?? this.powerHistory,
       chartRange: chartRange ?? this.chartRange,
       chartLoading: chartLoading ?? this.chartLoading,
