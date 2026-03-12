@@ -35,7 +35,7 @@ class _EnergyMonitorScreenState extends State<EnergyMonitorScreen>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    widget.controller.stop();
+    widget.controller.dispose();
     super.dispose();
   }
 

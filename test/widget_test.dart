@@ -15,7 +15,7 @@ void main() {
 
     await tester.pumpWidget(SolarPowerApp(controller: controller));
     expect(find.textContaining('Solar Monitor'), findsWidgets);
-
-    controller.dispose();
+    // controller.dispose() is now called by _EnergyMonitorScreenState.dispose()
+    // when Flutter tears down the widget tree at test end — no manual call needed.
   });
 }

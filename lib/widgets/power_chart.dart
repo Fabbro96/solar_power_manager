@@ -194,7 +194,9 @@ class PowerChart extends StatelessWidget {
   }
 
   ExtraLinesData _buildReferenceLines(_ChartMetrics metrics) {
-    if (metrics.spots.length < 2) {
+    // Also skip when all values are identical (flat line): the lines would
+    // both render at the same y, cluttering the baseline (common at night).
+    if (metrics.spots.length < 2 || metrics.max == metrics.min) {
       return const ExtraLinesData(horizontalLines: []);
     }
 

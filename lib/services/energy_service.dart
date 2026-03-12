@@ -77,8 +77,11 @@ class EnergyService {
           labels: const ["Today's Energy", 'Today']);
       final powerNow = _extractValue(response.body,
           labels: const ['Power Now', 'Current Power']);
+      // Use the pre-compiled W-regex so that kW values (e.g. "1.23 kW") are
+      // not silently mis-parsed as milliwatt-range watts.
+      final powerMatch = _powerRegex.firstMatch(powerNow);
       final numericPower =
-          double.tryParse(powerNow.replaceAll(RegExp(r'[^0-9.]'), ''));
+          powerMatch != null ? double.tryParse(powerMatch.group(1)!) : null;
 
       return EnergyData(
         todaysEnergy: todaysEnergy,
