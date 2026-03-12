@@ -57,25 +57,28 @@ GitHub Actions validates every push/PR on `master` and `main` with:
 - test execution
 - APK build on every `push`
 - APK uploaded as workflow artifact
-- APK uploaded as CI workflow artifact on every push.
+Two automated pipelines keep the project healthy:
 
-Workflow file: `.github/workflows/ci.yml`
+**CI — Continuous Integration** (`.github/workflows/ci.yml`)
+Runs on every push and pull request to `master`:
+- formatting check
+- static analysis
+- unit tests
 
-To download the APK:
+**CD — Continuous Delivery** (`.github/workflows/build-release.yml`)
+Runs on every version tag (`v*`), after auto-tagging:
+- runs tests (safety gate before distributing)
+- builds the release APK (split per ABI)
+- publishes to one of two GitHub Release channels:
 
-1. Open `Releases` on GitHub.
-2. **Beta** (tag: `beta`): updated on every tag push — latest changes, may be unstable.
-3. **Stable** (tag: `stable`): updated only for `vX.0.0` tags — major, vetted releases.
-4. Look for files named like `solar-power-manager-1.0.10--build-10-arm64-v8a.apk`.
-5. Or open the CI run `Artifacts` section for intermediate builds.
+| Channel | Tag on GitHub | When updated |
+|---------|---------------|--------------|
+| **Stable** | `stable` | `vX.0.0` tags (e.g. `v2.0.0`) |
+| **Beta** | `beta` | all other tags (e.g. `v1.0.11`) |
 
-## Release Build
+Each update replaces the previous APKs in the channel (no accumulation).
 
-Tag pushes matching `v*` trigger the Android APK build workflow:
-- `vX.0.0` (minor=0, patch=0) → published to the `stable` release.
-- All other tags → published to the `beta` release.
-
-Each channel keeps only the latest APKs (previous assets are removed on every update).
+To download: open `Releases` → pick `stable` or `beta` → download the APK matching your device architecture (`arm64-v8a` for most modern phones).
 
 Workflow file: `.github/workflows/build-release.yml`
 

@@ -1,4 +1,4 @@
-name: Build and Release Android APK
+name: CD
 
 on:
   push:
@@ -10,7 +10,7 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  build:
+  release:
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -35,6 +35,9 @@ jobs:
 
       - name: Install dependencies
         run: flutter pub get
+
+      - name: Run tests
+        run: flutter test
 
       - name: Clean stale build artifacts
         run: rm -rf build/app/outputs

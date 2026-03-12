@@ -1,4 +1,4 @@
-name: Flutter CI
+name: CI
 
 on:
   push:
@@ -11,10 +11,10 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build:
+  validate:
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: read
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
 
@@ -45,61 +45,3 @@ jobs:
 
       - name: Run tests
         run: flutter test
-
-      - name: Clean stale build artifacts
-        if: github.event_name == 'push'
-        run: rm -rf build/app/outputs
-
-      - name: Build Android APK
-        if: github.event_name == 'push'
-        run: flutter build apk --release --split-per-abi --no-pub
-
-      - name: Locate generated APK
-        if: github.event_name == 'push'
-        id: locate_apk
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          mapfile -t APK_PATHS < <(find build/app/outputs -type f -name '*.apk' | sort)
-          if [[ "${#APK_PATHS[@]}" -eq 0 ]]; then
-            echo "No APK found under build/app/outputs"
-            find build/app/outputs -maxdepth 5 -type f | sort
-            exit 1
-          fi
-
-          APP_VERSION="$(grep '^version:' pubspec.yaml | awk '{print $2}')"
-          SAFE_VERSION="${APP_VERSION//+/--build-}"
-          RELEASE_DIR="build/app/github-release-assets"
-          mkdir -p "$RELEASE_DIR"
-
-          manifest_path="$RELEASE_DIR/apk-list.txt"
-          : > "$manifest_path"
-
-          for apk in "${APK_PATHS[@]}"; do
-            base_name="$(basename "$apk")"
-            abi="universal"
-            for candidate in armeabi-v7a arm64-v8a x86_64 x86; do
-              if [[ "$base_name" == *"${candidate}"* ]]; then
-                abi="$candidate"
-                break
-              fi
-            done
-
-            versioned_apk="$RELEASE_DIR/solar-power-manager-${SAFE_VERSION}-${abi}.apk"
-            cp "$apk" "$versioned_apk"
-            echo "$versioned_apk" >> "$manifest_path"
-            echo "Prepared asset: $versioned_apk"
-          done
-
-          echo "artifact_dir=$RELEASE_DIR" >> "$GITHUB_OUTPUT"
-          echo "app_version=$APP_VERSION" >> "$GITHUB_OUTPUT"
-          echo "artifact_manifest=$manifest_path" >> "$GITHUB_OUTPUT"
-
-      - name: Upload Android APK artifact
-        if: github.event_name == 'push'
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with:
-          name: solar-power-manager-${{ steps.locate_apk.outputs.app_version }}
-          path: ${{ steps.locate_apk.outputs.artifact_dir }}
-          if-no-files-found: error
