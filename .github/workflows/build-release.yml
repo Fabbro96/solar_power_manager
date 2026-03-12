@@ -63,6 +63,7 @@ jobs:
       - name: Publish APK to stable or beta release
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
           TAG_REF: ${{ inputs.tag_name || github.ref_name }}
         shell: bash
         run: |
@@ -81,11 +82,11 @@ jobs:
           if [[ "$minor" == "0" && "$patch" == "0" ]]; then
             RELEASE_TAG="stable"
             RELEASE_TITLE="Stable — Solar Power Manager ${TAG_NAME}"
-            PRERELEASE_ARGS=()
+            PRERELEASE_FLAG=""
           else
             RELEASE_TAG="beta"
             RELEASE_TITLE="Beta — Solar Power Manager ${TAG_NAME}"
-            PRERELEASE_ARGS=(--prerelease)
+            PRERELEASE_FLAG="--prerelease"
           fi
 
           NOTES="$(printf 'Version: %s\nTag: %s\nCommit: %s' "$APP_VERSION" "$TAG_NAME" "$GITHUB_SHA")"
@@ -114,34 +115,55 @@ jobs:
           done
 
           # Ensure the release exists (idempotent)
-          if ! gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+          if ! gh release view "$RELEASE_TAG" --repo "$GH_REPO" >/dev/null 2>&1; then
             gh release create "$RELEASE_TAG" \
+              --repo "$GH_REPO" \
               --title "$RELEASE_TITLE" \
               --notes "$NOTES" \
               --target "$GITHUB_SHA" \
-              "${PRERELEASE_ARGS[@]}"
+              ${PRERELEASE_FLAG}
           else
             gh release edit "$RELEASE_TAG" \
+              --repo "$GH_REPO" \
               --title "$RELEASE_TITLE" \
               --notes "$NOTES" \
-              "${PRERELEASE_ARGS[@]}"
+              ${PRERELEASE_FLAG}
           fi
 
-          # Sometimes GitHub's release upload endpoint is briefly unavailable
-          # right after create/edit (404 on uploads.github.com). Retry a few
-          # times and use --clobber so asset replacement is idempotent.
-          upload_ok=false
-          for attempt in 1 2 3 4 5; do
-            if gh release upload "$RELEASE_TAG" --clobber "${assets[@]}"; then
-              upload_ok=true
-              break
+          # Read current assets first so we can clean stale files after a
+          # successful upload.
+          mapfile -t OLD_ASSETS < <(
+            gh release view "$RELEASE_TAG" --repo "$GH_REPO" --json assets -q '.assets[].name' 2>/dev/null || true
+          )
+
+          # Upload new APKs with retry. GitHub can briefly return 404 on the
+          # uploads endpoint right after release create/edit.
+          upload_attempt=1
+          max_attempts=5
+          until gh release upload "$RELEASE_TAG" "${assets[@]}" --clobber --repo "$GH_REPO"; do
+            if [[ "$upload_attempt" -ge "$max_attempts" ]]; then
+              echo "Upload failed after ${max_attempts} attempts"
+              exit 1
             fi
-            echo "Upload attempt ${attempt}/5 failed; retrying in 4s..."
-            sleep 4
+            upload_attempt=$((upload_attempt + 1))
+            echo "Upload failed; retrying (${upload_attempt}/${max_attempts})..."
+            sleep 3
           done
 
-          if [[ "$upload_ok" != "true" ]]; then
-            echo "Upload failed after retries."
-            exit 1
-          fi
+          # Remove stale assets from previous versions, keeping only what was
+          # just uploaded.
+          for asset_name in "${OLD_ASSETS[@]:-}"; do
+            [[ -z "$asset_name" ]] && continue
+            keep_asset="false"
+            for uploaded_path in "${assets[@]}"; do
+              if [[ "$asset_name" == "$(basename "$uploaded_path")" ]]; then
+                keep_asset="true"
+                break
+              fi
+            done
+
+            if [[ "$keep_asset" == "false" ]]; then
+              gh release delete-asset "$RELEASE_TAG" "$asset_name" --repo "$GH_REPO" --yes
+            fi
+          done
 
