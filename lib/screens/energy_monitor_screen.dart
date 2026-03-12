@@ -179,7 +179,12 @@ class _EnergyMonitorScreenState extends State<EnergyMonitorScreen>
                 }
                 Navigator.pop(ctx);
                 await widget.controller.updateInverterIp(ip);
-                await widget.onIpSaved?.call(ip);
+                try {
+                  await widget.onIpSaved?.call(ip);
+                } catch (_) {
+                  // SharedPreferences write failed — IP is applied in memory
+                  // but won't survive a restart. Non-fatal: ignore silently.
+                }
               },
               child: Text(
                 'Save',

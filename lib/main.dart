@@ -12,8 +12,15 @@ import 'theme/app_theme.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  final settings = await SettingsService.create();
-  final historyService = await PowerHistoryService.create();
+  late final SettingsService settings;
+  late final PowerHistoryService historyService;
+  try {
+    settings = await SettingsService.create();
+    historyService = await PowerHistoryService.create();
+  } catch (e) {
+    runApp(_StartupErrorApp(message: e.toString()));
+    return;
+  }
 
   await SystemChrome.setPreferredOrientations([
     DeviceOrientation.landscapeRight,
@@ -44,6 +51,31 @@ void main() async {
   );
 
   runApp(SolarPowerApp(controller: controller, settings: settings));
+}
+
+/// Shown when startup services fail to initialise (e.g. corrupted asset file).
+class _StartupErrorApp extends StatelessWidget {
+  final String message;
+  const _StartupErrorApp({required this.message});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      home: Scaffold(
+        backgroundColor: Colors.black,
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Text(
+              'Startup error:\n$message',
+              style: const TextStyle(color: Colors.redAccent, fontSize: 14),
+              textAlign: TextAlign.center,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class SolarPowerApp extends StatelessWidget {
