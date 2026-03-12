@@ -81,11 +81,11 @@ jobs:
           if [[ "$minor" == "0" && "$patch" == "0" ]]; then
             RELEASE_TAG="stable"
             RELEASE_TITLE="Stable — Solar Power Manager ${TAG_NAME}"
-            PRERELEASE_FLAG=""
+            PRERELEASE_ARGS=()
           else
             RELEASE_TAG="beta"
             RELEASE_TITLE="Beta — Solar Power Manager ${TAG_NAME}"
-            PRERELEASE_FLAG="--prerelease"
+            PRERELEASE_ARGS=(--prerelease)
           fi
 
           NOTES="$(printf 'Version: %s\nTag: %s\nCommit: %s' "$APP_VERSION" "$TAG_NAME" "$GITHUB_SHA")"
@@ -119,26 +119,29 @@ jobs:
               --title "$RELEASE_TITLE" \
               --notes "$NOTES" \
               --target "$GITHUB_SHA" \
-              ${PRERELEASE_FLAG}
+              "${PRERELEASE_ARGS[@]}"
           else
             gh release edit "$RELEASE_TAG" \
               --title "$RELEASE_TITLE" \
               --notes "$NOTES" \
-              ${PRERELEASE_FLAG}
+              "${PRERELEASE_ARGS[@]}"
           fi
 
-          # Remove all previous APK assets so old versions don't accumulate.
-          # We collect names first, then delete each one, and only proceed to
-          # upload if all deletes succeed — this prevents partial-replace states
-          # that caused 404 errors on re-upload.
-          mapfile -t OLD_ASSETS < <(
-            gh release view "$RELEASE_TAG" --json assets -q '.assets[].name' 2>/dev/null || true
-          )
-          for asset_name in "${OLD_ASSETS[@]:-}"; do
-            [[ -z "$asset_name" ]] && continue
-            gh release delete-asset "$RELEASE_TAG" "$asset_name" --yes
+          # Sometimes GitHub's release upload endpoint is briefly unavailable
+          # right after create/edit (404 on uploads.github.com). Retry a few
+          # times and use --clobber so asset replacement is idempotent.
+          upload_ok=false
+          for attempt in 1 2 3 4 5; do
+            if gh release upload "$RELEASE_TAG" --clobber "${assets[@]}"; then
+              upload_ok=true
+              break
+            fi
+            echo "Upload attempt ${attempt}/5 failed; retrying in 4s..."
+            sleep 4
           done
 
-          # Upload the new APKs
-          gh release upload "$RELEASE_TAG" "${assets[@]}"
+          if [[ "$upload_ok" != "true" ]]; then
+            echo "Upload failed after retries."
+            exit 1
+          fi
 
