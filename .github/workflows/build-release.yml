@@ -4,6 +4,12 @@ on:
   push:
     tags:
       - 'v*'
+  workflow_call:
+    inputs:
+      tag_name:
+        description: 'The version tag to build and publish (e.g. v1.0.31)'
+        required: false
+        type: string
 
 concurrency:
   group: release-${{ github.ref }}
@@ -57,11 +63,12 @@ jobs:
       - name: Publish APK to stable or beta release
         env:
           GH_TOKEN: ${{ github.token }}
+          TAG_REF: ${{ inputs.tag_name || github.ref_name }}
         shell: bash
         run: |
           set -euo pipefail
 
-          TAG_NAME="${GITHUB_REF_NAME}"
+          TAG_NAME="${TAG_REF}"
           APP_VERSION="$(grep '^version:' pubspec.yaml | awk '{print $2}')"
           SAFE_VERSION="${APP_VERSION//+/--build-}"
 

@@ -11,6 +11,9 @@ jobs:
       contents: write
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+    outputs:
+      new_tag: ${{ steps.tag.outputs.new_tag }}
+      was_created: ${{ steps.tag.outputs.was_created }}
 
     steps:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
@@ -23,6 +26,7 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
       - name: Create next semantic tag
+        id: tag
         shell: bash
         run: |
           set -euo pipefail
@@ -32,6 +36,7 @@ jobs:
           # If this commit is already tagged with a semantic version, do nothing.
           if git tag --points-at "$GITHUB_SHA" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
             echo "Commit already has a version tag. Skipping."
+            echo "was_created=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
@@ -50,3 +55,16 @@ jobs:
           git push origin "$next_tag"
 
           echo "Created and pushed tag: $next_tag"
+          echo "new_tag=$next_tag" >> "$GITHUB_OUTPUT"
+          echo "was_created=true" >> "$GITHUB_OUTPUT"
+
+  # Trigger CD directly — avoids the GitHub Actions restriction that prevents
+  # a GITHUB_TOKEN-authored tag push from triggering other workflows.
+  release:
+    needs: tag
+    if: needs.tag.outputs.was_created == 'true'
+    uses: ./.github/workflows/build-release.yml
+    with:
+      tag_name: ${{ needs.tag.outputs.new_tag }}
+    permissions:
+      contents: write
