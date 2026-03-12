@@ -51,7 +51,7 @@ jobs:
           echo "=== Full outputs directory ==="
           find build/app/outputs -type f 2>/dev/null | sort | head -20 || echo "No outputs directory"
 
-      - name: Publish versioned APK on tag release
+      - name: Publish APK to stable or beta release
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
@@ -61,6 +61,25 @@ jobs:
           TAG_NAME="${GITHUB_REF_NAME}"
           APP_VERSION="$(grep '^version:' pubspec.yaml | awk '{print $2}')"
           SAFE_VERSION="${APP_VERSION//+/--build-}"
+
+          # Determine release channel:
+          # vX.0.0 (minor=0 AND patch=0) → stable; everything else → beta
+          version_core="${TAG_NAME#v}"
+          IFS='.' read -r _major minor patch <<< "${version_core}"
+          minor="${minor:-0}"
+          patch="${patch:-0}"
+          if [[ "$minor" == "0" && "$patch" == "0" ]]; then
+            RELEASE_TAG="stable"
+            RELEASE_TITLE="Stable — Solar Power Manager ${TAG_NAME}"
+            PRERELEASE_FLAG=""
+          else
+            RELEASE_TAG="beta"
+            RELEASE_TITLE="Beta — Solar Power Manager ${TAG_NAME}"
+            PRERELEASE_FLAG="--prerelease"
+          fi
+
+          NOTES="$(printf 'Version: %s\nTag: %s\nCommit: %s' "$APP_VERSION" "$TAG_NAME" "$GITHUB_SHA")"
+
           mapfile -t APK_PATHS < <(find build/app/outputs -type f -name '*.apk' | sort)
           if [[ "${#APK_PATHS[@]}" -eq 0 ]]; then
             echo "No APK found under build/app/outputs"
@@ -79,22 +98,32 @@ jobs:
                 break
               fi
             done
-
             versioned_apk="build/app/github-release-assets/solar-power-manager-${SAFE_VERSION}-${abi}.apk"
             cp "$apk" "$versioned_apk"
             assets+=("$versioned_apk")
           done
 
-          RELEASE_TITLE="Solar Power Manager ${TAG_NAME}"
-          NOTES="Automated release for ${TAG_NAME}.\nApp version: ${APP_VERSION}\nCommit: ${GITHUB_SHA}"
-
-          if gh release view "$TAG_NAME" >/dev/null 2>&1; then
-            gh release upload "$TAG_NAME" "${assets[@]}" --clobber
-            gh release edit "$TAG_NAME" --title "$RELEASE_TITLE" --notes "$NOTES"
-          else
-            gh release create "$TAG_NAME" "${assets[@]}" \
+          # Ensure the release exists (idempotent)
+          if ! gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release create "$RELEASE_TAG" \
               --title "$RELEASE_TITLE" \
+              --notes "$NOTES" \
               --target "$GITHUB_SHA" \
-              --notes "$NOTES"
+              ${PRERELEASE_FLAG}
+          else
+            gh release edit "$RELEASE_TAG" \
+              --title "$RELEASE_TITLE" \
+              --notes "$NOTES" \
+              ${PRERELEASE_FLAG}
           fi
+
+          # Remove all previous APK assets so old versions don't accumulate
+          gh release view "$RELEASE_TAG" --json assets -q '.assets[].name' 2>/dev/null | \
+            while IFS= read -r asset_name; do
+              [[ -z "$asset_name" ]] && continue
+              gh release delete-asset "$RELEASE_TAG" "$asset_name" --yes 2>/dev/null || true
+            done
+
+          # Upload the new APKs
+          gh release upload "$RELEASE_TAG" "${assets[@]}"
 

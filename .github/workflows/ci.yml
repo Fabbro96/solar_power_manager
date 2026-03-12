@@ -103,33 +103,3 @@ jobs:
           name: solar-power-manager-${{ steps.locate_apk.outputs.app_version }}
           path: ${{ steps.locate_apk.outputs.artifact_dir }}
           if-no-files-found: error
-
-      - name: Publish rolling prerelease APKs
-        if: github.event_name == 'push'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          APP_VERSION="${{ steps.locate_apk.outputs.app_version }}"
-          RELEASE_TAG="latest-apk"
-          RELEASE_TITLE="Latest APK"
-          NOTES="Rolling prerelease built from ${GITHUB_SHA}.\nApp version: ${APP_VERSION}"
-
-          mapfile -t ASSETS < "${{ steps.locate_apk.outputs.artifact_manifest }}"
-          if [[ "${#ASSETS[@]}" -eq 0 ]]; then
-            echo "No prepared APK assets found"
-            exit 1
-          fi
-
-          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
-            gh release upload "$RELEASE_TAG" "${ASSETS[@]}" --clobber
-            gh release edit "$RELEASE_TAG" --title "$RELEASE_TITLE" --notes "$NOTES" --prerelease
-          else
-            gh release create "$RELEASE_TAG" "${ASSETS[@]}" \
-              --title "$RELEASE_TITLE" \
-              --target "$GITHUB_SHA" \
-              --notes "$NOTES" \
-              --prerelease
-          fi
