@@ -30,8 +30,22 @@ class SettingsService {
 
   static Future<SettingsService> create() async {
     final prefs = await SharedPreferences.getInstance();
-    final raw = await rootBundle.loadString('assets/inverter_defaults.json');
-    final defaults = jsonDecode(raw) as Map<String, dynamic>;
+    late final Map<String, dynamic> defaults;
+    try {
+      final raw = await rootBundle.loadString('assets/inverter_defaults.json');
+      defaults = jsonDecode(raw) as Map<String, dynamic>;
+    } catch (e) {
+      throw StateError(
+        'Failed to load inverter_defaults.json: $e. '
+        'Ensure the asset exists and is valid JSON.',
+      );
+    }
+    final requiredKeys = ['default_ip', 'inverter_path', 'username', 'password'];
+    for (final key in requiredKeys) {
+      if (!defaults.containsKey(key)) {
+        throw StateError('inverter_defaults.json is missing required key: "$key"');
+      }
+    }
     return SettingsService._(
       prefs: prefs,
       defaultIp: defaults['default_ip'] as String,

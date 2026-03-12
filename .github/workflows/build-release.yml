@@ -120,12 +120,17 @@ jobs:
               ${PRERELEASE_FLAG}
           fi
 
-          # Remove all previous APK assets so old versions don't accumulate
-          gh release view "$RELEASE_TAG" --json assets -q '.assets[].name' 2>/dev/null | \
-            while IFS= read -r asset_name; do
-              [[ -z "$asset_name" ]] && continue
-              gh release delete-asset "$RELEASE_TAG" "$asset_name" --yes 2>/dev/null || true
-            done
+          # Remove all previous APK assets so old versions don't accumulate.
+          # We collect names first, then delete each one, and only proceed to
+          # upload if all deletes succeed — this prevents partial-replace states
+          # that caused 404 errors on re-upload.
+          mapfile -t OLD_ASSETS < <(
+            gh release view "$RELEASE_TAG" --json assets -q '.assets[].name' 2>/dev/null || true
+          )
+          for asset_name in "${OLD_ASSETS[@]:-}"; do
+            [[ -z "$asset_name" ]] && continue
+            gh release delete-asset "$RELEASE_TAG" "$asset_name" --yes
+          done
 
           # Upload the new APKs
           gh release upload "$RELEASE_TAG" "${assets[@]}"
