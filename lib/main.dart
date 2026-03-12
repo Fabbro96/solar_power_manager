@@ -7,6 +7,7 @@ import 'screens/energy_monitor_screen.dart';
 import 'services/energy_service.dart';
 import 'services/power_history_service.dart';
 import 'services/settings_service.dart';
+import 'services/app_log_service.dart';
 import 'theme/app_theme.dart';
 
 void main() async {
@@ -29,17 +30,21 @@ void main() async {
     DeviceOrientation.portraitDown,
   ]);
 
+  final appLogs = AppLogService();
+
   final energyService = EnergyService(
     config: EnergyServiceConfig(
       url: settings.inverterUrl,
       username: settings.username,
       password: settings.password,
     ),
+    logService: appLogs,
   );
 
   final controller = EnergyController(
     service: energyService,
     historyService: historyService,
+    logService: appLogs,
     config: const AppConfig(
       fetchInterval: Duration(seconds: 90),
       minFetchInterval: Duration(seconds: 45),

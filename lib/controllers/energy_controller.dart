@@ -5,8 +5,25 @@ import 'package:flutter/foundation.dart';
 import '../config/app_config.dart';
 import '../models/energy_data.dart';
 import '../models/power_sample.dart';
+import '../services/app_log_service.dart';
 import '../services/energy_service.dart';
 import '../services/power_history_service.dart';
+
+class InverterIpProbeResult {
+  final bool success;
+  final String message;
+
+  const InverterIpProbeResult._({
+    required this.success,
+    required this.message,
+  });
+
+  const InverterIpProbeResult.success(String message)
+      : this._(success: true, message: message);
+
+  const InverterIpProbeResult.failure(String message)
+      : this._(success: false, message: message);
+}
 
 class EnergyController extends ChangeNotifier {
   static const int _pruneEverySamples = 24;
@@ -15,6 +32,7 @@ class EnergyController extends ChangeNotifier {
   final EnergyService _service;
   final PowerHistoryService? _historyService;
   final AppConfig _config;
+  final AppLogService _logs;
 
   MonitorState _state = const MonitorState();
 
@@ -42,14 +60,17 @@ class EnergyController extends ChangeNotifier {
     required EnergyService service,
     PowerHistoryService? historyService,
     AppConfig config = const AppConfig(),
+    AppLogService? logService,
   })  : _service = service,
         _historyService = historyService,
-        _config = config;
+        _config = config,
+        _logs = logService ?? AppLogService();
 
   void start() {
     if (_started || _disposed) return;
     _started = true;
     _currentFetchInterval = _config.fetchInterval;
+    _logs.info('EnergyController', 'Monitoring started');
 
     unawaited(_loadChartRange(_state.chartRange));
     _scheduleNextFetch(immediate: true);
@@ -59,12 +80,14 @@ class EnergyController extends ChangeNotifier {
     _fetchTimer?.cancel();
     _fetchTimer = null;
     _started = false;
+    _logs.debug('EnergyController', 'Monitoring stopped');
   }
 
   @override
   void dispose() {
     _disposed = true;
     stop();
+    _logs.info('EnergyController', 'Controller disposed');
     _service.dispose();
     unawaited(_historyService?.dispose());
     super.dispose();
@@ -101,12 +124,64 @@ class EnergyController extends ChangeNotifier {
     return uri?.host ?? '';
   }
 
+  AppLogEntry? get latestLog => _logs.latest;
+  List<AppLogEntry> get recentLogs => _logs.entries;
+
+  Future<InverterIpProbeResult> probeInverterIp(String candidateIp) async {
+    final normalized = EnergyService.normalizeIpv4(candidateIp);
+    if (normalized == null) {
+      _logs.warning('EnergyController', 'Rejected invalid IP: "$candidateIp"');
+      return const InverterIpProbeResult.failure('Formato IP non valido');
+    }
+
+    try {
+      final data = await _service.probeInverterIp(normalized);
+      if (data.latestPowerValue == null &&
+          data.powerNow == 'N/A' &&
+          data.todaysEnergy == 'N/A') {
+        _logs.warning('EnergyController',
+            'IP $normalized reachable but inverter payload has no usable values');
+        return const InverterIpProbeResult.failure(
+          'Connessione ok, ma l\'inverter non ha restituito dati validi',
+        );
+      }
+
+      _logs.info('EnergyController', 'IP probe successful for $normalized');
+      return InverterIpProbeResult.success(
+        'Connessione riuscita: ${data.powerNow} / ${data.todaysEnergy}',
+      );
+    } on EnergyServiceException catch (e) {
+      _logs.error(
+          'EnergyController', 'IP probe failed for $normalized: ${e.message}');
+      return InverterIpProbeResult.failure('Connessione fallita: ${e.message}');
+    } catch (e) {
+      _logs.error('EnergyController', 'IP probe crashed for $normalized: $e');
+      return InverterIpProbeResult.failure('Errore durante il test: $e');
+    }
+  }
+
   Future<void> updateInverterIp(String newIp) async {
+    final normalized = EnergyService.normalizeIpv4(newIp);
+    if (normalized == null) {
+      _logs.warning('EnergyController',
+          'updateInverterIp rejected invalid input: "$newIp"');
+      throw const EnergyServiceException('Invalid IPv4 address');
+    }
+
     _fetchGeneration++;
     _isFetching = false;
     final previousRange = _state.chartRange;
-    _service.updateInverterIp(newIp);
+    _service.updateInverterIp(normalized);
     _powerHistory = [];
+    _hasFreshReading = false;
+    _lastStoredSampleAt = null;
+    _errorStreak = 0;
+    _stableSampleStreak = 0;
+    _lastPowerReading = null;
+    _lastInternetCheckAt = null;
+
+    _logs.info('EnergyController',
+        'Applying inverter IP $normalized and restarting polling');
     updateState(MonitorState(chartRange: previousRange));
     stop();
     start();
@@ -178,6 +253,10 @@ class EnergyController extends ChangeNotifier {
       _hasFreshReading = data.latestPowerValue != null;
       _errorStreak = 0;
       _adjustFetchIntervalForReading(data.latestPowerValue);
+      _logs.debug(
+        'EnergyController',
+        'Fetch success: power=${data.powerNow}, today=${data.todaysEnergy}',
+      );
       updateState(_state.copyWith(
         energyData: data,
         inverterStatus: ConnectionStatus.connected,
@@ -191,6 +270,7 @@ class EnergyController extends ChangeNotifier {
       if (gen != _fetchGeneration || _disposed) return;
       _hasFreshReading = false;
       _adjustFetchIntervalForError();
+      _logs.warning('EnergyController', 'Fetch error: ${e.message}');
       updateState(_state.copyWith(
         inverterStatus: ConnectionStatus.error,
         errorDetail: e.message,
@@ -199,6 +279,7 @@ class EnergyController extends ChangeNotifier {
       if (gen != _fetchGeneration || _disposed) return;
       _hasFreshReading = false;
       _adjustFetchIntervalForError();
+      _logs.error('EnergyController', 'Unexpected fetch error: $e');
       updateState(_state.copyWith(
         inverterStatus: ConnectionStatus.error,
         errorDetail: e.toString(),
@@ -273,11 +354,14 @@ class EnergyController extends ChangeNotifier {
       if (_disposed) return;
       final internetStatus =
           ok ? ConnectionStatus.connected : ConnectionStatus.error;
+      _logs.debug(
+          'EnergyController', 'Internet check: ${ok ? 'ok' : 'failed'}');
       updateState(_state.copyWith(
         internetStatus: internetStatus,
       ));
     } catch (e) {
       if (_disposed) return;
+      _logs.warning('EnergyController', 'Internet check failed: $e');
       updateState(_state.copyWith(
         internetStatus: ConnectionStatus.error,
         errorDetail: 'Internet check failed: ${e.toString()}',
@@ -318,9 +402,7 @@ class EnergyController extends ChangeNotifier {
 
       updateState(_state.copyWith(powerHistory: _powerHistory));
     } catch (e) {
-      updateState(_state.copyWith(
-        errorDetail: 'Chart point update failed: ${e.toString()}',
-      ));
+      _logs.warning('EnergyController', 'Chart point update failed: $e');
     }
   }
 
@@ -342,6 +424,7 @@ class EnergyController extends ChangeNotifier {
       ));
     } catch (e) {
       if (requestId != _rangeRequestId || _disposed) return;
+      _logs.warning('EnergyController', 'History load failed: $e');
 
       updateState(_state.copyWith(
         chartRange: range,
@@ -362,9 +445,7 @@ class EnergyController extends ChangeNotifier {
       }
     } catch (e) {
       if (_disposed) return;
-      updateState(_state.copyWith(
-        errorDetail: 'History save failed: ${e.toString()}',
-      ));
+      _logs.warning('EnergyController', 'History save failed: $e');
     }
   }
 

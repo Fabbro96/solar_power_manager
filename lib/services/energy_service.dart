@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 
 import '../models/energy_data.dart';
+import 'app_log_service.dart';
 
 class EnergyServiceConfig {
   final String url;
@@ -20,6 +21,7 @@ class EnergyServiceConfig {
 class EnergyService {
   EnergyServiceConfig _config;
   final http.Client _client;
+  final AppLogService? _logService;
   late String _authHeader;
 
   // Pre-compiled regex constants — avoids re-compilation on every call.
@@ -35,9 +37,13 @@ class EnergyService {
   static final _htmlTagRegex = RegExp(r'<[^>]+>');
   static final _whitespaceRegex = RegExp(r'\s+');
 
-  EnergyService({required EnergyServiceConfig config, http.Client? client})
-      : _config = config,
-        _client = client ?? http.Client() {
+  EnergyService({
+    required EnergyServiceConfig config,
+    http.Client? client,
+    AppLogService? logService,
+  })  : _config = config,
+        _client = client ?? http.Client(),
+        _logService = logService {
     _authHeader = _buildAuthHeader(config);
   }
 
@@ -48,21 +54,58 @@ class EnergyService {
 
   EnergyServiceConfig get config => _config;
 
+  static String? normalizeIpv4(String input) {
+    final raw = input.trim();
+    final parts = raw.split('.');
+    if (parts.length != 4) return null;
+
+    final normalized = <String>[];
+    for (final part in parts) {
+      if (part.isEmpty) return null;
+      final value = int.tryParse(part);
+      if (value == null || value < 0 || value > 255) return null;
+      normalized.add(value.toString());
+    }
+
+    return normalized.join('.');
+  }
+
   /// Swaps only the host of the URL, keeping path and credentials intact.
   void updateInverterIp(String newIp) {
+    final normalized = normalizeIpv4(newIp);
+    if (normalized == null) {
+      throw const EnergyServiceException('Invalid IPv4 address');
+    }
+
     final uri = Uri.parse(_config.url);
-    final newUrl = uri.replace(host: newIp).toString();
+    final newUrl = uri.replace(host: normalized).toString();
     _config = EnergyServiceConfig(
       url: newUrl,
       username: _config.username,
       password: _config.password,
     );
+    _logService?.info('EnergyService', 'Inverter IP updated to $normalized');
   }
 
   Future<EnergyData> fetchEnergyData() async {
+    return _fetchEnergyDataFromUri(Uri.parse(config.url));
+  }
+
+  Future<EnergyData> probeInverterIp(String ip) async {
+    final normalized = normalizeIpv4(ip);
+    if (normalized == null) {
+      throw const EnergyServiceException('Invalid IPv4 address');
+    }
+
+    final uri = Uri.parse(config.url).replace(host: normalized);
+    _logService?.debug('EnergyService', 'Probing inverter at ${uri.host}');
+    return _fetchEnergyDataFromUri(uri);
+  }
+
+  Future<EnergyData> _fetchEnergyDataFromUri(Uri uri) async {
     try {
       final response = await _client.get(
-        Uri.parse(config.url),
+        uri,
         headers: {'Authorization': _authHeader},
       ).timeout(const Duration(seconds: 10));
 
@@ -92,6 +135,7 @@ class EnergyService {
     } on EnergyServiceException {
       rethrow;
     } catch (e) {
+      _logService?.error('EnergyService', 'Fetch failed from ${uri.host}: $e');
       throw EnergyServiceException(
         'Failed to fetch energy data: ${e.toString()}',
       );

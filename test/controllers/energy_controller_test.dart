@@ -63,6 +63,28 @@ void main() {
       controller.dispose();
     });
 
+    test('probeInverterIp succeeds on reachable inverter', () async {
+      final controller = buildController();
+
+      final result = await controller.probeInverterIp('192.168.1.50');
+
+      expect(result.success, isTrue);
+      expect(result.message, contains('Connessione riuscita'));
+
+      controller.dispose();
+    });
+
+    test('updateInverterIp rejects invalid IPv4 input', () async {
+      final controller = buildController();
+
+      expect(
+        () => controller.updateInverterIp('192.168.1.999'),
+        throwsA(isA<EnergyServiceException>()),
+      );
+
+      controller.dispose();
+    });
+
     test('start can be called twice without creating lifecycle errors', () {
       final controller = buildController();
 

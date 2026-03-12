@@ -33,6 +33,13 @@ void main() {
   ''';
 
   group('EnergyService', () {
+    test('normalizeIpv4 strips leading zeros and validates ranges', () {
+      expect(EnergyService.normalizeIpv4('192.168.001.016'), '192.168.1.16');
+      expect(EnergyService.normalizeIpv4(' 10.0.0.5 '), '10.0.0.5');
+      expect(EnergyService.normalizeIpv4('300.1.1.1'), isNull);
+      expect(EnergyService.normalizeIpv4('foo.bar'), isNull);
+    });
+
     test('fetchEnergyData parses HTML correctly on 200 response', () async {
       final mockClient = MockClient((request) async {
         expect(request.url.toString(), dummyConfig.url);
@@ -101,6 +108,19 @@ void main() {
       final isConnected = await service.checkInternetConnectivity();
 
       expect(isConnected, isFalse);
+    });
+
+    test('probeInverterIp validates IPv4 input before request', () async {
+      final mockClient = MockClient((request) async {
+        fail('HTTP should not be called for invalid IP');
+      });
+
+      final service = EnergyService(config: dummyConfig, client: mockClient);
+
+      expect(
+        () => service.probeInverterIp('999.999.1.2'),
+        throwsA(isA<EnergyServiceException>()),
+      );
     });
   });
 }
