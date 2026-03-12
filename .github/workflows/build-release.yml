@@ -12,7 +12,7 @@ on:
         type: string
 
 concurrency:
-  group: release-${{ github.ref }}
+  group: release-channel
   cancel-in-progress: false
 
 jobs:
@@ -136,18 +136,51 @@ jobs:
             gh release view "$RELEASE_TAG" --repo "$GH_REPO" --json assets -q '.assets[].name' 2>/dev/null || true
           )
 
-          # Upload new APKs with retry. GitHub can briefly return 404 on the
-          # uploads endpoint right after release create/edit.
-          upload_attempt=1
-          max_attempts=5
-          until gh release upload "$RELEASE_TAG" "${assets[@]}" --clobber --repo "$GH_REPO"; do
-            if [[ "$upload_attempt" -ge "$max_attempts" ]]; then
-              echo "Upload failed after ${max_attempts} attempts"
-              exit 1
+          # Resolve release id and upload_url once, then upload each file via
+          # the releases API. This avoids flaky behavior observed with
+          # `gh release upload` in CI for long-lived channel releases.
+          release_json="$(gh api "repos/${GH_REPO}/releases/tags/${RELEASE_TAG}")"
+          release_id="$(jq -r '.id' <<< "$release_json")"
+          upload_url_template="$(jq -r '.upload_url' <<< "$release_json")"
+          upload_url_base="${upload_url_template%%\{*}"
+
+          if [[ -z "$release_id" || "$release_id" == "null" || -z "$upload_url_base" || "$upload_url_base" == "null" ]]; then
+            echo "Unable to resolve release metadata for ${RELEASE_TAG}"
+            exit 1
+          fi
+
+          for uploaded_path in "${assets[@]}"; do
+            asset_name="$(basename "$uploaded_path")"
+            encoded_name="$(jq -rn --arg v "$asset_name" '$v|@uri')"
+            upload_url="${upload_url_base}?name=${encoded_name}"
+
+            # Replace same-named assets to keep channel release clean.
+            existing_asset_id="$(
+              gh api "repos/${GH_REPO}/releases/${release_id}/assets" 2>/dev/null \
+                | jq -r --arg n "$asset_name" '.[] | select(.name == $n) | .id' \
+                | head -n 1 || true
+            )"
+            if [[ -n "$existing_asset_id" ]]; then
+              gh api --method DELETE "repos/${GH_REPO}/releases/assets/${existing_asset_id}"
             fi
-            upload_attempt=$((upload_attempt + 1))
-            echo "Upload failed; retrying (${upload_attempt}/${max_attempts})..."
-            sleep 3
+
+            upload_attempt=1
+            max_attempts=5
+            until curl -fsSL \
+              -X POST \
+              -H "Authorization: Bearer ${GH_TOKEN}" \
+              -H "Accept: application/vnd.github+json" \
+              -H "Content-Type: application/vnd.android.package-archive" \
+              --data-binary @"${uploaded_path}" \
+              "${upload_url}" >/dev/null; do
+              if [[ "$upload_attempt" -ge "$max_attempts" ]]; then
+                echo "Upload failed for ${asset_name} after ${max_attempts} attempts"
+                exit 1
+              fi
+              upload_attempt=$((upload_attempt + 1))
+              echo "Upload failed for ${asset_name}; retrying (${upload_attempt}/${max_attempts})..."
+              sleep 3
+            done
           done
 
           # Remove stale assets from previous versions, keeping only what was
