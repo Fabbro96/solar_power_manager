@@ -265,6 +265,7 @@ class _EnergyMonitorScreenState extends State<EnergyMonitorScreen>
             ),
             TextButton(
               onPressed: () async {
+                final navigator = Navigator.of(ctx);
                 final ip = composeIp();
                 if (!_isValidIp(ip)) {
                   setDialogState(() => errorText = 'Invalid IP address');
@@ -295,7 +296,7 @@ class _EnergyMonitorScreenState extends State<EnergyMonitorScreen>
                   await widget.controller.updateInverterIp(ip);
                   await widget.onIpSaved?.call(ip);
                   if (!mounted) return;
-                  Navigator.pop(ctx);
+                  navigator.pop();
                 } catch (e) {
                   if (!mounted) return;
                   setDialogState(() {
