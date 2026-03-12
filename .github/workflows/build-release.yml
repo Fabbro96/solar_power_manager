@@ -40,7 +40,7 @@ jobs:
         run: rm -rf build/app/outputs
 
       - name: Build APK
-        run: flutter build apk --release --no-pub
+        run: flutter build apk --release --split-per-abi --no-pub
 
       - name: Verify build output
         run: |
@@ -60,28 +60,39 @@ jobs:
 
           TAG_NAME="${GITHUB_REF_NAME}"
           APP_VERSION="$(grep '^version:' pubspec.yaml | awk '{print $2}')"
-          APK_PATH="$(find build/app/outputs -type f -name 'app-release.apk' | head -n 1 || true)"
-          if [[ -z "$APK_PATH" ]]; then
-            APK_PATH="$(find build/app/outputs -type f -name '*.apk' | head -n 1 || true)"
-          fi
-          if [[ -z "$APK_PATH" ]]; then
+          SAFE_VERSION="${APP_VERSION//+/--build-}"
+          mapfile -t APK_PATHS < <(find build/app/outputs -type f -name '*.apk' | sort)
+          if [[ "${#APK_PATHS[@]}" -eq 0 ]]; then
             echo "No APK found under build/app/outputs"
             find build/app/outputs -maxdepth 5 -type f | sort
             exit 1
           fi
 
-          ASSET_NAME="solar-power-manager-${TAG_NAME}.apk"
-          VERSIONED_APK="build/app/outputs/${ASSET_NAME}"
-          cp "$APK_PATH" "$VERSIONED_APK"
+          mkdir -p build/app/github-release-assets
+          assets=()
+          for apk in "${APK_PATHS[@]}"; do
+            base_name="$(basename "$apk")"
+            abi="universal"
+            for candidate in armeabi-v7a arm64-v8a x86_64 x86; do
+              if [[ "$base_name" == *"${candidate}"* ]]; then
+                abi="$candidate"
+                break
+              fi
+            done
+
+            versioned_apk="build/app/github-release-assets/solar-power-manager-${SAFE_VERSION}-${abi}.apk"
+            cp "$apk" "$versioned_apk"
+            assets+=("$versioned_apk")
+          done
 
           RELEASE_TITLE="Solar Power Manager ${TAG_NAME}"
           NOTES="Automated release for ${TAG_NAME}.\nApp version: ${APP_VERSION}\nCommit: ${GITHUB_SHA}"
 
           if gh release view "$TAG_NAME" >/dev/null 2>&1; then
-            gh release upload "$TAG_NAME" "$VERSIONED_APK" --clobber
+            gh release upload "$TAG_NAME" "${assets[@]}" --clobber
             gh release edit "$TAG_NAME" --title "$RELEASE_TITLE" --notes "$NOTES"
           else
-            gh release create "$TAG_NAME" "$VERSIONED_APK" \
+            gh release create "$TAG_NAME" "${assets[@]}" \
               --title "$RELEASE_TITLE" \
               --target "$GITHUB_SHA" \
               --notes "$NOTES"

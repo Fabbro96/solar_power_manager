@@ -57,18 +57,19 @@ GitHub Actions validates every push/PR on `master` and `main` with:
 - test execution
 - APK build on every `push`
 - APK uploaded as workflow artifact
-- APK published to a rolling prerelease (`latest-apk`) for quick download
+- Split APKs published to a rolling prerelease (`latest-apk`) for quick download
 
 Workflow file: `.github/workflows/ci.yml`
 
 To download the APK after a push:
 
 1. Open `Releases` and download assets from `Latest APK` (tag: `latest-apk`).
-2. Or open the CI run `Artifacts` section and download `solar-power-manager-apk-<commit-sha>`.
+2. Look for files named like `solar-power-manager-1.0.10--build-10-arm64-v8a.apk`.
+3. Or open the CI run `Artifacts` section and download `solar-power-manager-<version>`.
 
 ## Release Build
 
-Tag pushes matching `v*` trigger Android APK build workflow.
+Tag pushes matching `v*` trigger Android APK build workflow and publish versioned split APK assets to the corresponding GitHub Release.
 
 Workflow file: `.github/workflows/build-release.yml`
 

@@ -2,17 +2,17 @@
 
 ## 📦 Installazione
 
-Puoi scaricare l'APK (Android Package) compilato da [GitHub Releases](https://github.com/Fabbro96/solar_power_manager/releases).
+Puoi scaricare gli APK (Android Package) compilati da [GitHub Releases](https://github.com/Fabbro96/solar_power_manager/releases).
 
 ### Come installare l'APK su Android
 
-1. **Download**: Scarica il file `app-release.apk` dalla [pagina delle release](https://github.com/Fabbro96/solar_power_manager/releases/latest)
+1. **Download**: Scarica dalla [pagina delle release](https://github.com/Fabbro96/solar_power_manager/releases/latest) il file con versione e architettura nel nome, ad esempio `solar-power-manager-1.0.10--build-10-arm64-v8a.apk`
 
 2. **Trasferimento**: Trasferisci il file nel tuo dispositivo Android (tramite USB, Drive cloud, ecc.)
 
 3. **Installazione**: 
    - Apri il file manager del tuo telefono
-   - Naviga al file `app-release.apk`
+   - Naviga al file APK scaricato
    - Tocca il file e conferma l'installazione
    - Potrebbe essere necessario attivare "Installa app da fonti sconosciute" nelle impostazioni di sicurezza
 
@@ -38,4 +38,4 @@ Se il tuo inverter ha un IP diverso, dovrai ricompilare l'app modificando `lib/c
 
 ## 🚀 Aggiornamenti Futuri
 
-Nuove release verranno pubblicate automaticamente su [GitHub Releases](https://github.com/Fabbro96/solar_power_manager/releases) tramite GitHub Actions quando verranno creati nuovi tag git.
+Nuove build verranno pubblicate automaticamente su [GitHub Releases](https://github.com/Fabbro96/solar_power_manager/releases) tramite GitHub Actions: ogni push aggiorna la prerelease `latest-apk`, mentre ogni tag `v*` crea o aggiorna una release versionata con gli APK nel nome corretto.
