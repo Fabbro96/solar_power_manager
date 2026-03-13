@@ -48,8 +48,36 @@ jobs:
       - name: Clean stale build artifacts
         run: rm -rf build/app/outputs
 
+      - name: Determine build version from tag
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          TAG_NAME="${{ inputs.tag_name || github.ref_name }}"
+
+          if [[ "$TAG_NAME" =~ ^v([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
+            APP_VERSION_CORE="${BASH_REMATCH[1]}"
+            IFS='.' read -r _major _minor _patch <<< "$APP_VERSION_CORE"
+            APP_BUILD_NUMBER="${_patch:-0}"
+          else
+            APP_VERSION="$(grep '^version:' pubspec.yaml | awk '{print $2}')"
+            APP_VERSION_CORE="${APP_VERSION%%+*}"
+            APP_BUILD_NUMBER="${APP_VERSION#*+}"
+            if [[ "$APP_BUILD_NUMBER" == "$APP_VERSION" ]]; then
+              APP_BUILD_NUMBER="0"
+            fi
+          fi
+
+          APP_VERSION="${APP_VERSION_CORE}+${APP_BUILD_NUMBER}"
+          SAFE_VERSION="${APP_VERSION//+/--build-}"
+
+          echo "APP_VERSION=${APP_VERSION}" >> "$GITHUB_ENV"
+          echo "APP_VERSION_CORE=${APP_VERSION_CORE}" >> "$GITHUB_ENV"
+          echo "APP_BUILD_NUMBER=${APP_BUILD_NUMBER}" >> "$GITHUB_ENV"
+          echo "SAFE_VERSION=${SAFE_VERSION}" >> "$GITHUB_ENV"
+
       - name: Build APK
-        run: flutter build apk --release --split-per-abi --no-pub
+        run: flutter build apk --release --split-per-abi --no-pub --build-name "$APP_VERSION_CORE" --build-number "$APP_BUILD_NUMBER"
 
       - name: Verify build output
         run: |
@@ -70,8 +98,7 @@ jobs:
           set -euo pipefail
 
           TAG_NAME="${TAG_REF}"
-          APP_VERSION="$(grep '^version:' pubspec.yaml | awk '{print $2}')"
-          SAFE_VERSION="${APP_VERSION//+/--build-}"
+          # APP_VERSION and SAFE_VERSION are computed earlier from the tag (or pubspec fallback).
 
           # Determine release channel:
           # vX.0.0 (minor=0 AND patch=0) → stable; everything else → beta
