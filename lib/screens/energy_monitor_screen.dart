@@ -329,8 +329,23 @@ class _EnergyMonitorScreenState extends State<EnergyMonitorScreen>
   }
 
   Future<void> _openReleaseLink(dynamic release) async {
-    final url = Uri.parse(
-        'https://github.com/Fabbro96/solar_power_manager/releases/latest');
+    final tag = release?.tagName as String?;
+    String urlStr;
+
+    if (tag != null) {
+      // Prefer opening the specific tag if available (works even without a GitHub "Release").
+      var normalizedTag = tag;
+      if (RegExp(r'^v?\d+\.\d+\.\d+$').hasMatch(normalizedTag)) {
+        if (!normalizedTag.startsWith('v')) {
+          normalizedTag = 'v$normalizedTag';
+        }
+      }
+      urlStr = 'https://github.com/Fabbro96/solar_power_manager/releases/tag/$normalizedTag';
+    } else {
+      urlStr = 'https://github.com/Fabbro96/solar_power_manager/releases/latest';
+    }
+
+    final url = Uri.parse(urlStr);
     if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:http/http.dart' as http;
@@ -42,6 +43,8 @@ class VersionCheckService {
   static const _repo = 'solar_power_manager';
   static const _releaseURL =
       'https://api.github.com/repos/$_owner/$_repo/releases/latest';
+  static const _tagsURL =
+      'https://api.github.com/repos/$_owner/$_repo/tags?per_page=100';
 
   final String _localVersion;
 
@@ -52,10 +55,25 @@ class VersionCheckService {
   Future<GitHubRelease?> getLatestRelease() async {
     try {
       final response = await http.get(Uri.parse(_releaseURL));
-      if (response.statusCode != 200) return null;
+      if (response.statusCode == 200) {
+        final release = _parseGitHubRelease(response.body);
+        if (release != null) {
+          // If the release has a semver tag (e.g. v2.0.0), use it directly.
+          final semver = _extractSemver(release.tagName);
+          if (semver != null) {
+            return release;
+          }
+        }
+      }
 
-      final json = response.body;
-      return _parseGitHubRelease(json);
+      // Fallback: If the "latest release" API doesn't return a semver-friendly tag,
+      // look for the latest semver tag from the repo's tags list.
+      final latestTag = await _getLatestSemverTag();
+      if (latestTag != null) {
+        return GitHubRelease(tagName: latestTag);
+      }
+
+      return null;
     } catch (_) {
       return null;
     }
@@ -64,7 +82,9 @@ class VersionCheckService {
   /// Compare versions (e.g., "2.0.0" vs "2.0.1").
   /// Returns true if remoteVersion > localVersion.
   bool isUpdateAvailable(String remoteVersion) {
-    return _compareVersions(remoteVersion, _localVersion) > 0;
+    final remoteSemver = _extractSemver(remoteVersion) ?? remoteVersion;
+    final localSemver = _extractSemver(_localVersion) ?? _localVersion;
+    return _compareVersions(remoteSemver, localSemver) > 0;
   }
 
   /// Download APK for the given architecture.
@@ -96,30 +116,22 @@ class VersionCheckService {
 
   GitHubRelease? _parseGitHubRelease(String jsonStr) {
     try {
-      // Simple JSON parsing (avoiding json dependency)
-      final tagMatch =
-          RegExp(r'"tag_name"\s*:\s*"([^"]+)"').firstMatch(jsonStr);
-      if (tagMatch == null) return null;
+      final json = jsonDecode(jsonStr) as Map<String, dynamic>;
+      final tagName = json['tag_name'] as String?;
+      if (tagName == null) return null;
 
-      final tagName = tagMatch.group(1)!;
-
-      // Extract asset URLs
       String? apkUrl;
       String? apkArm64Url;
       String? apkArmv7Url;
       String? apkX86Url;
       String? apkX86_64Url;
 
-      final assetsMatch =
-          RegExp(r'"assets"\s*:\s*\[([^\]]+)\]').firstMatch(jsonStr);
-      if (assetsMatch != null) {
-        final assetsStr = assetsMatch.group(1)!;
-        final downloads = RegExp(r'"browser_download_url"\s*:\s*"([^"]+)"')
-            .allMatches(assetsStr)
-            .map((m) => m.group(1)!)
-            .toList();
+      final assets = json['assets'] as List<dynamic>?;
+      if (assets != null) {
+        for (final asset in assets.cast<Map<String, dynamic>>()) {
+          final url = asset['browser_download_url'] as String?;
+          if (url == null) continue;
 
-        for (final url in downloads) {
           if (url.contains('arm64')) {
             apkArm64Url = url;
           } else if (url.contains('armv7')) {
@@ -142,6 +154,36 @@ class VersionCheckService {
         apkX86Url: apkX86Url,
         apkX86_64Url: apkX86_64Url,
       );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  String? _extractSemver(String tag) {
+    // Finds version patterns like "v1.2.3" or "1.2.3".
+    final match = RegExp(r'v?(\d+\.\d+\.\d+)').firstMatch(tag);
+    return match?.group(1);
+  }
+
+  Future<String?> _getLatestSemverTag() async {
+    try {
+      final response = await http.get(Uri.parse(_tagsURL));
+      if (response.statusCode != 200) return null;
+
+      final json = jsonDecode(response.body) as List<dynamic>;
+      String? best;
+      for (final entry in json.cast<Map<String, dynamic>>()) {
+        final name = entry['name'] as String?;
+        if (name == null) continue;
+
+        final semver = _extractSemver(name);
+        if (semver == null) continue;
+
+        if (best == null || _compareVersions(semver, best) > 0) {
+          best = semver;
+        }
+      }
+      return best;
     } catch (_) {
       return null;
     }
