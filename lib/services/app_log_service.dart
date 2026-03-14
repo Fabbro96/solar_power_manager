@@ -39,7 +39,8 @@ class AppLogService {
   Completer<void>? _flushCompleter;
   Timer? _flushTimer;
 
-  AppLogService({int maxEntries = 250, Duration flushDelay = const Duration(seconds: 2)})
+  AppLogService(
+      {int maxEntries = 250, Duration flushDelay = const Duration(seconds: 2)})
       : _maxEntries = maxEntries,
         _flushDelay = flushDelay;
 

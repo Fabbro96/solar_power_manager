@@ -10,8 +10,7 @@ import 'package:solar_power_manager/services/app_log_service.dart';
 import 'package:solar_power_manager/services/energy_service.dart';
 
 class _NoopEnergyController extends EnergyController {
-  _NoopEnergyController(
-      {required super.service, super.logService});
+  _NoopEnergyController({required super.service, super.logService});
 
   @override
   void start() {}

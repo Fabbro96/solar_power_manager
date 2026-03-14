@@ -45,7 +45,8 @@ class VersionCheckService {
 
   final String _localVersion;
 
-  VersionCheckService({required String localVersion}) : _localVersion = localVersion;
+  VersionCheckService({required String localVersion})
+      : _localVersion = localVersion;
 
   /// Fetch the latest release from GitHub.
   Future<GitHubRelease?> getLatestRelease() async {
