@@ -340,9 +340,11 @@ class _EnergyMonitorScreenState extends State<EnergyMonitorScreen>
           normalizedTag = 'v$normalizedTag';
         }
       }
-      urlStr = 'https://github.com/Fabbro96/solar_power_manager/releases/tag/$normalizedTag';
+      urlStr =
+          'https://github.com/Fabbro96/solar_power_manager/releases/tag/$normalizedTag';
     } else {
-      urlStr = 'https://github.com/Fabbro96/solar_power_manager/releases/latest';
+      urlStr =
+          'https://github.com/Fabbro96/solar_power_manager/releases/latest';
     }
 
     final url = Uri.parse(urlStr);
