@@ -11,13 +11,14 @@ import '../widgets/power_chart.dart';
 class EnergyMonitorScreen extends StatefulWidget {
   final EnergyController controller;
 
-  /// Called after a new IP is validated and applied — used to persist it.
-  final Future<void> Function(String)? onIpSaved;
+  /// Called after new settings are validated and applied — used to persist them.
+  final Future<void> Function(String ip, String username, String password)?
+      onSettingsSaved;
 
   const EnergyMonitorScreen({
     super.key,
     required this.controller,
-    this.onIpSaved,
+    this.onSettingsSaved,
   });
 
   @override
@@ -107,7 +108,11 @@ class _EnergyMonitorScreenState extends State<EnergyMonitorScreen>
 
   // ── IP Settings dialog ────────────────────────────────────────────
 
-  Future<void> _showIpDialog(BuildContext context) async {
+  Future<void> _showSettingsDialog(BuildContext context) async {
+    final userCtrl =
+        TextEditingController(text: widget.controller.currentUsername);
+    final passCtrl =
+        TextEditingController(text: widget.controller.currentPassword);
     final current = widget.controller.currentInverterIp;
     final parts = _splitIpIntoOctets(current);
     final c1 = TextEditingController(text: parts[0]);
@@ -146,7 +151,10 @@ class _EnergyMonitorScreenState extends State<EnergyMonitorScreen>
         probeOk = false;
       });
 
-      final result = await widget.controller.probeInverterIp(ip);
+      final result = await widget.controller.probeInverterConfig(
+          ip: ip,
+          username: userCtrl.text.trim(),
+          password: passCtrl.text.trim());
       if (!mounted) return;
 
       setDialogState(() {
@@ -162,7 +170,7 @@ class _EnergyMonitorScreenState extends State<EnergyMonitorScreen>
         builder: (ctx, setDialogState) => AlertDialog(
           backgroundColor: const Color(0xFF111111),
           title: const Text(
-            'Inverter IP address',
+            'Inverter Settings',
             style: TextStyle(color: Colors.white70),
           ),
           content: Column(
@@ -204,6 +212,37 @@ class _EnergyMonitorScreenState extends State<EnergyMonitorScreen>
                   Expanded(child: _octetField(c4, f4, null, setDialogState)),
                 ],
               ),
+              const SizedBox(height: 14),
+              const Text('Inverter Credentials',
+                  style: TextStyle(color: Colors.white54, fontSize: 12)),
+              const SizedBox(height: 8),
+              TextField(
+                controller: userCtrl,
+                style: const TextStyle(color: Colors.white),
+                decoration: const InputDecoration(
+                  labelText: 'Username',
+                  labelStyle: TextStyle(color: Colors.white54),
+                  enabledBorder: OutlineInputBorder(
+                      borderSide: BorderSide(color: Colors.white24)),
+                  focusedBorder: OutlineInputBorder(
+                      borderSide: BorderSide(color: AppColors.primary)),
+                ),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: passCtrl,
+                obscureText: true,
+                style: const TextStyle(color: Colors.white),
+                decoration: const InputDecoration(
+                  labelText: 'Password',
+                  labelStyle: TextStyle(color: Colors.white54),
+                  enabledBorder: OutlineInputBorder(
+                      borderSide: BorderSide(color: Colors.white24)),
+                  focusedBorder: OutlineInputBorder(
+                      borderSide: BorderSide(color: AppColors.primary)),
+                ),
+              ),
+              const SizedBox(height: 14),
               const SizedBox(height: 10),
               Row(
                 children: [
@@ -270,8 +309,11 @@ class _EnergyMonitorScreenState extends State<EnergyMonitorScreen>
                 });
 
                 if (!probeOk) {
-                  final probeResult =
-                      await widget.controller.probeInverterIp(ip);
+                  final probeResult = await widget.controller
+                      .probeInverterConfig(
+                          ip: ip,
+                          username: userCtrl.text.trim(),
+                          password: passCtrl.text.trim());
                   if (!mounted) return;
 
                   if (!probeResult.success) {
@@ -285,8 +327,12 @@ class _EnergyMonitorScreenState extends State<EnergyMonitorScreen>
                 }
 
                 try {
-                  await widget.controller.updateInverterIp(ip);
-                  await widget.onIpSaved?.call(ip);
+                  await widget.controller.updateInverterConfig(
+                      ip: ip,
+                      username: userCtrl.text.trim(),
+                      password: passCtrl.text.trim());
+                  await widget.onSettingsSaved
+                      ?.call(ip, userCtrl.text.trim(), passCtrl.text.trim());
                   if (!mounted) return;
                   navigator.pop();
                 } catch (e) {
@@ -308,6 +354,8 @@ class _EnergyMonitorScreenState extends State<EnergyMonitorScreen>
       ),
     );
 
+    userCtrl.dispose();
+    passCtrl.dispose();
     c1.dispose();
     c2.dispose();
     c3.dispose();
@@ -440,7 +488,7 @@ class _EnergyMonitorScreenState extends State<EnergyMonitorScreen>
                 Icons.settings_ethernet,
                 color: Colors.white54,
               ),
-              onPressed: () => _showIpDialog(context),
+              onPressed: () => _showSettingsDialog(context),
             ),
             actions: [
               PopupMenuButton<_EnergyMonitorMenuAction>(
@@ -463,7 +511,7 @@ class _EnergyMonitorScreenState extends State<EnergyMonitorScreen>
                 onSelected: (action) {
                   switch (action) {
                     case _EnergyMonitorMenuAction.changeIp:
-                      _showIpDialog(context);
+                      _showSettingsDialog(context);
                       break;
                     case _EnergyMonitorMenuAction.showLogs:
                       _showLogsDialog(context);
@@ -509,7 +557,7 @@ class _EnergyMonitorScreenState extends State<EnergyMonitorScreen>
             ),
           ),
           TextButton(
-            onPressed: () => _showIpDialog(context),
+            onPressed: () => _showSettingsDialog(context),
             child: const Text(
               'Change IP',
               style: TextStyle(color: Colors.orange, fontSize: 13),

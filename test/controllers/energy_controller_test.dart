@@ -51,11 +51,12 @@ void main() {
       controller.dispose();
     });
 
-    test('updateInverterIp preserves current chart range', () async {
+    test('updateInverterConfig preserves current chart range', () async {
       final controller = buildController();
 
       await controller.setChartRange(ChartRange.last30Days);
-      await controller.updateInverterIp('192.168.1.50');
+      await controller.updateInverterConfig(
+          ip: '192.168.1.50', username: 'a', password: 'b');
 
       expect(controller.currentInverterIp, '192.168.1.50');
       expect(controller.state.chartRange, ChartRange.last30Days);
@@ -63,10 +64,11 @@ void main() {
       controller.dispose();
     });
 
-    test('probeInverterIp succeeds on reachable inverter', () async {
+    test('probeInverterConfig succeeds on reachable inverter', () async {
       final controller = buildController();
 
-      final result = await controller.probeInverterIp('192.168.1.50');
+      final result = await controller.probeInverterConfig(
+          ip: '192.168.1.50', username: 'a', password: 'b');
 
       expect(result.success, isTrue);
       expect(result.message, contains('Connessione riuscita'));
@@ -74,11 +76,12 @@ void main() {
       controller.dispose();
     });
 
-    test('updateInverterIp rejects invalid IPv4 input', () async {
+    test('updateInverterConfig rejects invalid IPv4 input', () async {
       final controller = buildController();
 
       expect(
-        () => controller.updateInverterIp('192.168.1.999'),
+        () => controller.updateInverterConfig(
+            ip: '192.168.1.999', username: 'a', password: 'b'),
         throwsA(isA<EnergyServiceException>()),
       );
 

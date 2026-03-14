@@ -106,7 +106,13 @@ class SolarPowerApp extends StatelessWidget {
       theme: buildAppTheme(),
       home: EnergyMonitorScreen(
         controller: controller,
-        onIpSaved: settings?.setInverterIp,
+        onSettingsSaved: (ip, username, password) async {
+          if (settings != null) {
+            await settings!.setInverterIp(ip);
+            await settings!.setUsername(username);
+            await settings!.setPassword(password);
+          }
+        },
       ),
     );
   }

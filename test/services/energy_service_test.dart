@@ -110,7 +110,7 @@ void main() {
       expect(isConnected, isFalse);
     });
 
-    test('probeInverterIp validates IPv4 input before request', () async {
+    test('probeInverterConfig validates IPv4 input before request', () async {
       final mockClient = MockClient((request) async {
         fail('HTTP should not be called for invalid IP');
       });
@@ -118,7 +118,8 @@ void main() {
       final service = EnergyService(config: dummyConfig, client: mockClient);
 
       expect(
-        () => service.probeInverterIp('999.999.1.2'),
+        () => service.probeInverterConfig(
+            ip: '999.999.1.2', username: 'a', password: 'b'),
         throwsA(isA<EnergyServiceException>()),
       );
     });

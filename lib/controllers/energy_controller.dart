@@ -136,6 +136,9 @@ class EnergyController extends ChangeNotifier {
     return uri?.host ?? '';
   }
 
+  String get currentUsername => _service.config.username;
+  String get currentPassword => _service.config.password;
+
   AppLogEntry? get latestLog => _logs.latest;
   List<AppLogEntry> get recentLogs => _logs.entries;
 
@@ -146,15 +149,23 @@ class EnergyController extends ChangeNotifier {
 
   Future<void> clearLogs() => _logs.clear();
 
-  Future<InverterIpProbeResult> probeInverterIp(String candidateIp) async {
-    final normalized = EnergyService.normalizeIpv4(candidateIp);
+  Future<InverterIpProbeResult> probeInverterConfig({
+    required String ip,
+    required String username,
+    required String password,
+  }) async {
+    final normalized = EnergyService.normalizeIpv4(ip);
     if (normalized == null) {
-      _logs.warning('EnergyController', 'Rejected invalid IP: "$candidateIp"');
+      _logs.warning('EnergyController', 'Rejected invalid IP: "$ip"');
       return const InverterIpProbeResult.failure('Formato IP non valido');
     }
 
     try {
-      final data = await _service.probeInverterIp(normalized);
+      final data = await _service.probeInverterConfig(
+        ip: normalized,
+        username: username,
+        password: password,
+      );
       if (data.latestPowerValue == null &&
           data.powerNow == 'N/A' &&
           data.todaysEnergy == 'N/A') {
@@ -165,25 +176,30 @@ class EnergyController extends ChangeNotifier {
         );
       }
 
-      _logs.info('EnergyController', 'IP probe successful for $normalized');
+      _logs.info('EnergyController', 'Config probe successful for $normalized');
       return InverterIpProbeResult.success(
         'Connessione riuscita: ${data.powerNow} / ${data.todaysEnergy}',
       );
     } on EnergyServiceException catch (e) {
-      _logs.error(
-          'EnergyController', 'IP probe failed for $normalized: ${e.message}');
+      _logs.error('EnergyController',
+          'Config probe failed for $normalized: ${e.message}');
       return InverterIpProbeResult.failure('Connessione fallita: ${e.message}');
     } catch (e) {
-      _logs.error('EnergyController', 'IP probe crashed for $normalized: $e');
+      _logs.error(
+          'EnergyController', 'Config probe crashed for $normalized: $e');
       return InverterIpProbeResult.failure('Errore durante il test: $e');
     }
   }
 
-  Future<void> updateInverterIp(String newIp) async {
-    final normalized = EnergyService.normalizeIpv4(newIp);
+  Future<void> updateInverterConfig({
+    required String ip,
+    required String username,
+    required String password,
+  }) async {
+    final normalized = EnergyService.normalizeIpv4(ip);
     if (normalized == null) {
       _logs.warning('EnergyController',
-          'updateInverterIp rejected invalid input: "$newIp"');
+          'updateInverterConfig rejected invalid input: "$ip"');
       throw const EnergyServiceException('Invalid IPv4 address');
     }
 
@@ -191,6 +207,7 @@ class EnergyController extends ChangeNotifier {
     _isFetching = false;
     final previousRange = _state.chartRange;
     _service.updateInverterIp(normalized);
+    _service.updateCredentials(username, password);
     _powerHistory = [];
     _hasFreshReading = false;
     _lastStoredSampleAt = null;
@@ -200,7 +217,7 @@ class EnergyController extends ChangeNotifier {
     _lastInternetCheckAt = null;
 
     _logs.info('EnergyController',
-        'Applying inverter IP $normalized and restarting polling');
+        'Applying config for IP $normalized and restarting polling');
     updateState(MonitorState(chartRange: previousRange));
     stop();
     start();

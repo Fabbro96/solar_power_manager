@@ -91,22 +91,42 @@ class EnergyService {
     return _fetchEnergyDataFromUri(Uri.parse(config.url));
   }
 
-  Future<EnergyData> probeInverterIp(String ip) async {
+  /// Updates the credentials manually and rebuilds auth headers.
+  void updateCredentials(String newUsername, String newPassword) {
+    _config = EnergyServiceConfig(
+      url: _config.url,
+      username: newUsername,
+      password: newPassword,
+    );
+    _authHeader = _buildAuthHeader(_config);
+    _logService?.info('EnergyService', 'Inverter credentials updated');
+  }
+
+  Future<EnergyData> probeInverterConfig(
+      {required String ip,
+      required String username,
+      required String password}) async {
     final normalized = normalizeIpv4(ip);
     if (normalized == null) {
       throw const EnergyServiceException('Invalid IPv4 address');
     }
 
     final uri = Uri.parse(config.url).replace(host: normalized);
-    _logService?.debug('EnergyService', 'Probing inverter at ${uri.host}');
-    return _fetchEnergyDataFromUri(uri);
+    final tempConfig = EnergyServiceConfig(
+        url: uri.toString(), username: username, password: password);
+    final tempAuthHeader = _buildAuthHeader(tempConfig);
+
+    _logService?.debug('EnergyService',
+        'Probing inverter at ${uri.host} with new credentials');
+    return _fetchEnergyDataFromUri(uri, customAuthHeader: tempAuthHeader);
   }
 
-  Future<EnergyData> _fetchEnergyDataFromUri(Uri uri) async {
+  Future<EnergyData> _fetchEnergyDataFromUri(Uri uri,
+      {String? customAuthHeader}) async {
     try {
       final response = await _client.get(
         uri,
-        headers: {'Authorization': _authHeader},
+        headers: {'Authorization': customAuthHeader ?? _authHeader},
       ).timeout(const Duration(seconds: 10));
 
       if (response.statusCode != 200) {
