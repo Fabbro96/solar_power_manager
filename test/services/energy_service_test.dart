@@ -6,8 +6,8 @@ import 'package:solar_power_manager/services/energy_service.dart';
 void main() {
   const dummyConfig = EnergyServiceConfig(
     url: 'http://192.168.1.16/monitor.htm',
-    username: 'admin',
-    password: 'admin',
+    username: 'user',
+    password: 'pass',
   );
 
   final dummyHtml = '''
@@ -43,8 +43,8 @@ void main() {
     test('fetchEnergyData parses HTML correctly on 200 response', () async {
       final mockClient = MockClient((request) async {
         expect(request.url.toString(), dummyConfig.url);
-        // Basic auth contains 'admin:admin' -> YWRtaW46YWRtaW4=
-        expect(request.headers['Authorization'], 'Basic YWRtaW46YWRtaW4=');
+        // Basic auth contains 'user:pass' -> dXNlcjpwYXNz
+        expect(request.headers['Authorization'], 'Basic dXNlcjpwYXNz');
         return http.Response(dummyHtml, 200);
       });
 

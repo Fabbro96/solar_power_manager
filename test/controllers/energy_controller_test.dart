@@ -25,8 +25,8 @@ void main() {
     final service = EnergyService(
       config: const EnergyServiceConfig(
         url: 'http://192.168.1.16/monitor.htm',
-        username: 'admin',
-        password: 'admin',
+        username: 'user',
+        password: 'pass',
       ),
       client: client,
     );

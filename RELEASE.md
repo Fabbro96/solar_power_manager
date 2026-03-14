@@ -23,10 +23,11 @@ Puoi scaricare gli APK (Android Package) compilati da [GitHub Releases](https://
 
 ## 🔧 Configurazione
 
-L'app è preconfigurata per connettersi a:
-- **URL**: `http://192.168.1.16/monitor.htm`
-- **Username**: `admin`
-- **Password**: `admin`
+Questa repository pubblica **non include credenziali sensibili**. Configura l'URL e le credenziali dell'inverter direttamente nelle impostazioni dell'app o modificando `assets/inverter_defaults.json`.
+
+- **URL**: `http://192.168.1.16/monitor.htm` (esempio)
+- **Username**: `CHANGE_ME`
+- **Password**: `CHANGE_ME`
 
 Se il tuo inverter ha un IP diverso, dovrai ricompilare l'app modificando `lib/config/app_config.dart`.
 
