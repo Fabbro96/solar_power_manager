@@ -223,7 +223,7 @@ class _EnergyMonitorScreenState extends State<EnergyMonitorScreen>
                       _showSettingsDialog(context);
                       break;
                     case _EnergyMonitorMenuAction.checkUpdates:
-                      _checkUpdatesManually(context);
+                      _checkUpdatesManually();
                       break;
                     case _EnergyMonitorMenuAction.showLogs:
                       _showLogsDialog(context);
@@ -249,7 +249,7 @@ class _EnergyMonitorScreenState extends State<EnergyMonitorScreen>
                 UpdateNotificationBar(
                   tagName: widget.controller.availableRelease!.tagName,
                   onDismiss: widget.controller.dismissUpdateNotification,
-                  onInstall: () => _downloadLatestApk(context),
+                  onInstall: _downloadLatestApk,
                 ),
               Expanded(child: _buildBody(state)),
             ],
@@ -259,7 +259,7 @@ class _EnergyMonitorScreenState extends State<EnergyMonitorScreen>
     );
   }
 
-  Future<void> _downloadLatestApk(BuildContext context) async {
+  Future<void> _downloadLatestApk() async {
     var progress = 0.0;
     bool finished = false;
     void Function(void Function())? dialogSetState;
@@ -304,11 +304,11 @@ class _EnergyMonitorScreenState extends State<EnergyMonitorScreen>
     );
 
     finished = true;
-    if (!context.mounted) return;
+    if (!mounted) return;
     Navigator.of(context).pop();
 
     if (path != null) {
-      await _installDownloadedApk(context, path);
+      await _installDownloadedApk(path);
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Update download failed.')),
@@ -316,16 +316,13 @@ class _EnergyMonitorScreenState extends State<EnergyMonitorScreen>
     }
   }
 
-  Future<void> _installDownloadedApk(BuildContext context, String path) async {
-    final shouldInstall = await _showInstallUpdateDialog(context);
-    if (!shouldInstall || !context.mounted) return;
+  Future<void> _installDownloadedApk(String path) async {
+    final shouldInstall = await _showInstallUpdateDialog();
+    if (!shouldInstall || !mounted) return;
 
-    final installerOpened = await _openInstallerWithPermissionHandling(
-      context,
-      path,
-    );
+    final installerOpened = await _openInstallerWithPermissionHandling(path);
 
-    if (!installerOpened || !context.mounted) return;
+    if (!installerOpened || !mounted) return;
 
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
@@ -337,7 +334,7 @@ class _EnergyMonitorScreenState extends State<EnergyMonitorScreen>
     );
   }
 
-  Future<bool> _showInstallUpdateDialog(BuildContext context) async {
+  Future<bool> _showInstallUpdateDialog() async {
     final result = await showDialog<bool>(
       context: context,
       builder: (dialogContext) {
@@ -366,23 +363,21 @@ class _EnergyMonitorScreenState extends State<EnergyMonitorScreen>
   }
 
   Future<bool> _openInstallerWithPermissionHandling(
-    BuildContext context,
     String path, {
     bool allowPermissionRetry = true,
   }) async {
     final canInstall = await ApkInstallService.canRequestPackageInstalls();
     if (!canInstall) {
-      if (!allowPermissionRetry || !context.mounted) return false;
+      if (!allowPermissionRetry || !mounted) return false;
 
-      final granted = await _requestInstallPermission(context);
-      if (!granted || !context.mounted) return false;
+      final granted = await _requestInstallPermission();
+      if (!granted || !mounted) return false;
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
             content: Text('Permission enabled, reopening installer...')),
       );
       return _openInstallerWithPermissionHandling(
-        context,
         path,
         allowPermissionRetry: false,
       );
@@ -395,17 +390,16 @@ class _EnergyMonitorScreenState extends State<EnergyMonitorScreen>
 
     final message = result.message.toLowerCase();
     if (allowPermissionRetry && _looksLikePermissionIssue(message)) {
-      final granted = await _requestInstallPermission(context);
-      if (!granted || !context.mounted) return false;
+      final granted = await _requestInstallPermission();
+      if (!granted || !mounted) return false;
 
       return _openInstallerWithPermissionHandling(
-        context,
         path,
         allowPermissionRetry: false,
       );
     }
 
-    if (!context.mounted) return false;
+    if (!mounted) return false;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         duration: const Duration(seconds: 8),
@@ -417,7 +411,7 @@ class _EnergyMonitorScreenState extends State<EnergyMonitorScreen>
     return false;
   }
 
-  Future<bool> _requestInstallPermission(BuildContext context) async {
+  Future<bool> _requestInstallPermission() async {
     final wantsSettings = await showDialog<bool>(
       context: context,
       builder: (dialogContext) {
@@ -443,7 +437,7 @@ class _EnergyMonitorScreenState extends State<EnergyMonitorScreen>
     if (wantsSettings != true) return false;
 
     final granted = await ApkInstallService.requestPackageInstallPermission();
-    if (!context.mounted) return granted;
+    if (!mounted) return granted;
 
     if (!granted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -478,12 +472,12 @@ class _EnergyMonitorScreenState extends State<EnergyMonitorScreen>
         .trim();
   }
 
-  Future<void> _checkUpdatesManually(BuildContext context) async {
+  Future<void> _checkUpdatesManually() async {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Checking for updates...')),
     );
     final hasUpdate = await widget.controller.checkForUpdate();
-    if (!context.mounted) return;
+    if (!mounted) return;
 
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
     if (hasUpdate) {
