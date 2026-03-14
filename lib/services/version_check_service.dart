@@ -147,7 +147,9 @@ class VersionCheckService {
       // Se il tag_name è qualcosa type "stable", proviamo a cercare la versione
       // all'interno del nome della release (es. "Stable - v1.0.0").
       String tagName = rawTagName;
-      if (_extractSemver(rawTagName) == null && name != null && _extractSemver(name) != null) {
+      if (_extractSemver(rawTagName) == null &&
+          name != null &&
+          _extractSemver(name) != null) {
         tagName = name;
       }
 
