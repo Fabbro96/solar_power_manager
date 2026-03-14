@@ -41,7 +41,6 @@ class EnergyController extends ChangeNotifier {
   MonitorState get state => _state;
 
   GitHubRelease? _availableRelease;
-  DateTime? _lastVersionCheckAt;
   Timer? _versionCheckTimer;
 
   GitHubRelease? get availableRelease => _availableRelease;
@@ -236,7 +235,6 @@ class EnergyController extends ChangeNotifier {
         _availableRelease = null;
         notifyListeners();
       }
-      _lastVersionCheckAt = DateTime.now();
     } catch (e) {
       _logs.debug('EnergyController', 'Version check failed: $e');
     }

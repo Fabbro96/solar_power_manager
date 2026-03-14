@@ -322,6 +322,8 @@ class _EnergyMonitorScreenState extends State<EnergyMonitorScreen>
     final logs = await widget.controller.readAllLogs();
     final path = widget.controller.logFilePath;
 
+    if (!context.mounted) return;
+
     await showDialog<void>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -362,7 +364,7 @@ class _EnergyMonitorScreenState extends State<EnergyMonitorScreen>
 
   Future<void> _clearLogs(BuildContext context) async {
     await widget.controller.clearLogs();
-    if (!mounted) return;
+    if (!context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Logs cleared')),
     );
