@@ -140,8 +140,16 @@ class VersionCheckService {
   GitHubRelease? _parseGitHubRelease(String jsonStr) {
     try {
       final json = jsonDecode(jsonStr) as Map<String, dynamic>;
-      final tagName = json['tag_name'] as String?;
-      if (tagName == null) return null;
+      final rawTagName = json['tag_name'] as String?;
+      final name = json['name'] as String?;
+      if (rawTagName == null) return null;
+
+      // Se il tag_name è qualcosa type "stable", proviamo a cercare la versione
+      // all'interno del nome della release (es. "Stable - v1.0.0").
+      String tagName = rawTagName;
+      if (_extractSemver(rawTagName) == null && name != null && _extractSemver(name) != null) {
+        tagName = name;
+      }
 
       String? apkUrl;
       String? apkArm64Url;

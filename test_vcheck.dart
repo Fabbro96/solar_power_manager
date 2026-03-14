@@ -1,0 +1,1 @@
+import 'lib/services/version_check_service.dart'; void main() async { final service = VersionCheckService(localVersion: '1.0.0'); final release = await service.getLatestRelease(); if (release != null) { print('Found tag: ${release.tagName}'); print('APK URL: ${release.apkUrl}'); print('ARM64 URL: ${release.apkArm64Url}'); } else { print('NULL release found'); } }
