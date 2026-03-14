@@ -4,20 +4,13 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
-import androidx.activity.result.contract.ActivityResultContracts
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : FlutterActivity() {
 	private var pendingPermissionResult: MethodChannel.Result? = null
-
-	private val unknownSourcesLauncher =
-		registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
-			val result = pendingPermissionResult ?: return@registerForActivityResult
-			pendingPermissionResult = null
-			result.success(canRequestPackageInstalls())
-		}
+	private val requestUnknownSourcesCode = 43021
 
 	override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
 		super.configureFlutterEngine(flutterEngine)
@@ -58,6 +51,17 @@ class MainActivity : FlutterActivity() {
 			Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
 			Uri.parse("package:$packageName"),
 		)
-		unknownSourcesLauncher.launch(intent)
+		startActivityForResult(intent, requestUnknownSourcesCode)
+	}
+
+	@Deprecated("Deprecated in Java")
+	override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+		super.onActivityResult(requestCode, resultCode, data)
+
+		if (requestCode != requestUnknownSourcesCode) return
+
+		val result = pendingPermissionResult ?: return
+		pendingPermissionResult = null
+		result.success(canRequestPackageInstalls())
 	}
 }
