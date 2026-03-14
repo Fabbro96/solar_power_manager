@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:ffi';
 import 'dart:io';
 
 import 'package:http/http.dart' as http;
@@ -130,9 +131,20 @@ class VersionCheckService {
 
   /// Get device architecture.
   static String getDeviceArch() {
-    // On Android, you'd use Platform.operatingSystemVersion or native code.
-    // For now, return a safe default or read from native side.
-    return 'arm64'; // default for most modern devices
+    if (!Platform.isAndroid) return 'arm64';
+
+    switch (Abi.current()) {
+      case Abi.androidArm64:
+        return 'arm64';
+      case Abi.androidArm:
+        return 'armv7';
+      case Abi.androidIA32:
+        return 'x86';
+      case Abi.androidX64:
+        return 'x86_64';
+      default:
+        return 'arm64';
+    }
   }
 
   // ── Helpers ────────────────────────────────────────────────────────
