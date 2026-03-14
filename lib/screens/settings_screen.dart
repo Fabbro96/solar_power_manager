@@ -35,6 +35,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _probeOk = false;
   bool _isProbing = false;
   bool _isSaving = false;
+  bool _obscurePassword = true;
 
   @override
   void initState() {
@@ -282,13 +283,27 @@ class _SettingsScreenState extends State<SettingsScreen> {
             const SizedBox(height: 16),
             TextField(
               controller: _passCtrl,
-              obscureText: true,
+              obscureText: _obscurePassword,
               style: const TextStyle(color: Colors.white),
               decoration: InputDecoration(
                 labelText: 'Password',
                 labelStyle: const TextStyle(color: Colors.white54),
                 prefixIcon:
                     const Icon(Icons.lock_outline, color: Colors.white54),
+                suffixIcon: IconButton(
+                  tooltip: _obscurePassword ? 'Show password' : 'Hide password',
+                  icon: Icon(
+                    _obscurePassword
+                        ? Icons.visibility_off_outlined
+                        : Icons.visibility_outlined,
+                    color: Colors.white54,
+                  ),
+                  onPressed: () {
+                    setState(() {
+                      _obscurePassword = !_obscurePassword;
+                    });
+                  },
+                ),
                 enabledBorder: OutlineInputBorder(
                   borderSide: const BorderSide(color: Colors.white24),
                   borderRadius: BorderRadius.circular(12),
