@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../controllers/energy_controller.dart';
+import 'package:open_filex/open_filex.dart';
+
 import '../models/energy_data.dart';
 import '../models/power_sample.dart';
 import '../theme/app_theme.dart';
@@ -381,11 +383,11 @@ class _EnergyMonitorScreenState extends State<EnergyMonitorScreen>
             content: Text('Download complete, opening installer...')),
       );
 
-      final uri = Uri.file(path);
-      if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+      final result = await OpenFilex.open(path);
+      if (result.type != ResultType.done) {
         if (!context.mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Downloaded APK at: $path')),
+          SnackBar(content: Text('Could not open APK: ${result.message}')),
         );
       }
     } else {

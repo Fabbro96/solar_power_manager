@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 import 'config/app_config.dart';
 import 'controllers/energy_controller.dart';
@@ -35,6 +36,9 @@ void main() async {
   final appLogs = AppLogService();
   await appLogs.init();
 
+  final packageInfo = await PackageInfo.fromPlatform();
+  final appVersion = packageInfo.version;
+
   final energyService = EnergyService(
     config: EnergyServiceConfig(
       url: settings.inverterUrl,
@@ -56,6 +60,7 @@ void main() async {
       stableSamplesForBackoff: 3,
       maxChartPoints: 60,
     ),
+    appVersion: appVersion,
   );
 
   runApp(SolarPowerApp(controller: controller, settings: settings));

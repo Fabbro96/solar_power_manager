@@ -34,6 +34,7 @@ class EnergyController extends ChangeNotifier {
   final PowerHistoryService? _historyService;
   final AppConfig _config;
   final AppLogService _logs;
+  final String _appVersion;
   late final VersionCheckService _versionCheck;
 
   MonitorState _state = const MonitorState();
@@ -72,6 +73,7 @@ class EnergyController extends ChangeNotifier {
   })  : _service = service,
         _historyService = historyService,
         _config = config,
+        _appVersion = appVersion,
         _logs = logService ?? AppLogService() {
     _versionCheck = VersionCheckService(localVersion: appVersion);
   }
@@ -244,7 +246,7 @@ class EnergyController extends ChangeNotifier {
 
       if (_versionCheck.isUpdateAvailable(release.tagName)) {
         _logs.info('EnergyController',
-            'New version ${release.tagName} available (current: 2.0.0)');
+            'New version ${release.tagName} available (current: $_appVersion)');
         _availableRelease = release;
         notifyListeners();
         return true;

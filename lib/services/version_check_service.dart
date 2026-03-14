@@ -3,7 +3,7 @@ import 'dart:io';
 
 import 'package:http/http.dart' as http;
 import 'package:path/path.dart' as p;
-import 'package:sqflite/sqflite.dart';
+import 'package:path_provider/path_provider.dart';
 
 class GitHubRelease {
   final String tagName;
@@ -99,9 +99,9 @@ class VersionCheckService {
     void Function(int received, int total)? onProgress,
   }) async {
     try {
-      final dir = await getDatabasesPath();
+      final dir = await getTemporaryDirectory();
       final fileName = 'solar_power_manager_$arch.apk';
-      final filePath = p.join(dir, fileName);
+      final filePath = p.join(dir.path, fileName);
       final file = File(filePath);
       final uri = Uri.parse(apkUrl);
 
