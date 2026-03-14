@@ -1,6 +1,5 @@
 // Basic smoke test for the Solar Power Manager app.
 
-
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:solar_power_manager/controllers/energy_controller.dart';
