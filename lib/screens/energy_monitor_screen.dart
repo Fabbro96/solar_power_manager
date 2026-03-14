@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import 'package:url_launcher/url_launcher.dart';
 
 import '../controllers/energy_controller.dart';
 import '../models/energy_data.dart';
@@ -314,10 +313,10 @@ class _EnergyMonitorScreenState extends State<EnergyMonitorScreen>
               ),
               TextButton(
                 onPressed: () {
-                  _openReleaseLink(release);
+                  _downloadLatestApk(context);
                 },
                 child: const Text(
-                  'Get it',
+                  'Download',
                   style: TextStyle(color: Colors.blue, fontSize: 13),
                 ),
               ),
@@ -328,30 +327,22 @@ class _EnergyMonitorScreenState extends State<EnergyMonitorScreen>
     );
   }
 
-  Future<void> _openReleaseLink(dynamic release) async {
-    final tag = release?.tagName as String?;
-    String urlStr;
+  Future<void> _downloadLatestApk(BuildContext context) async {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Downloading update...')),
+    );
 
-    if (tag != null) {
-      // Prefer opening the specific tag if available (works even without a GitHub "Release").
-      var normalizedTag = tag;
-      if (RegExp(r'^v?\d+\.\d+\.\d+$').hasMatch(normalizedTag)) {
-        if (!normalizedTag.startsWith('v')) {
-          normalizedTag = 'v$normalizedTag';
-        }
-      }
-      urlStr =
-          'https://github.com/Fabbro96/solar_power_manager/releases/tag/$normalizedTag';
-    } else {
-      urlStr =
-          'https://github.com/Fabbro96/solar_power_manager/releases/latest';
-    }
+    final path = await widget.controller.downloadLatestApk();
+    if (!context.mounted) return;
 
-    final url = Uri.parse(urlStr);
-    if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
-      if (!mounted) return;
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    if (path != null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Could not open the release link')),
+        SnackBar(content: Text('Downloaded APK to: $path')),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Update download failed.')),
       );
     }
   }

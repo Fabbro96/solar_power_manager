@@ -258,6 +258,28 @@ class EnergyController extends ChangeNotifier {
     return false;
   }
 
+  /// Download the latest available APK (if any) for this device.
+  ///
+  /// Returns the local file path where the APK was saved, or null if download
+  /// failed or no APK was available.
+  Future<String?> downloadLatestApk() async {
+    if (_disposed) return null;
+
+    if (_availableRelease == null) {
+      await checkForUpdate();
+    }
+
+    final release = _availableRelease;
+    if (release == null) return null;
+
+    final arch = VersionCheckService.getDeviceArch();
+    final apkUrl = release.getApkForArch(arch) ?? release.apkUrl;
+    if (apkUrl == null) return null;
+
+    final file = await _versionCheck.downloadApk(apkUrl, arch);
+    return file?.path;
+  }
+
   void dismissUpdateNotification() {
     if (_disposed) return;
     _availableRelease = null;
