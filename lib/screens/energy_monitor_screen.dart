@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+
 import 'package:url_launcher/url_launcher.dart';
 
 import '../controllers/energy_controller.dart';
 import '../models/energy_data.dart';
 import '../models/power_sample.dart';
 import '../theme/app_theme.dart';
+import 'settings_screen.dart';
 import '../widgets/energy_info_card.dart';
 import '../widgets/power_chart.dart';
 
@@ -110,261 +111,14 @@ class _EnergyMonitorScreenState extends State<EnergyMonitorScreen>
   // ── IP Settings dialog ────────────────────────────────────────────
 
   Future<void> _showSettingsDialog(BuildContext context) async {
-    final userCtrl =
-        TextEditingController(text: widget.controller.currentUsername);
-    final passCtrl =
-        TextEditingController(text: widget.controller.currentPassword);
-    final current = widget.controller.currentInverterIp;
-    final parts = _splitIpIntoOctets(current);
-    final c1 = TextEditingController(text: parts[0]);
-    final c2 = TextEditingController(text: parts[1]);
-    final c3 = TextEditingController(text: parts[2]);
-    final c4 = TextEditingController(text: parts[3]);
-    final f1 = FocusNode();
-    final f2 = FocusNode();
-    final f3 = FocusNode();
-    final f4 = FocusNode();
-
-    String? errorText;
-    String? probeMessage;
-    bool probeOk = false;
-    bool isProbing = false;
-    bool isSaving = false;
-
-    String composeIp() =>
-        '${c1.text.trim()}.${c2.text.trim()}.${c3.text.trim()}.${c4.text.trim()}';
-
-    Future<void> runProbe(StateSetter setDialogState) async {
-      final ip = composeIp();
-      if (!_isValidIp(ip)) {
-        setDialogState(() {
-          errorText = 'Invalid IP address';
-          probeMessage = null;
-          probeOk = false;
-        });
-        return;
-      }
-
-      setDialogState(() {
-        isProbing = true;
-        errorText = null;
-        probeMessage = null;
-        probeOk = false;
-      });
-
-      final result = await widget.controller.probeInverterConfig(
-          ip: ip,
-          username: userCtrl.text.trim(),
-          password: passCtrl.text.trim());
-      if (!mounted) return;
-
-      setDialogState(() {
-        isProbing = false;
-        probeMessage = result.message;
-        probeOk = result.success;
-      });
-    }
-
-    await showDialog<void>(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setDialogState) => AlertDialog(
-          backgroundColor: const Color(0xFF111111),
-          title: const Text(
-            'Inverter Settings',
-            style: TextStyle(color: Colors.white70),
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Current configuration',
-                style: TextStyle(color: Colors.white54, fontSize: 12),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                current,
-                style: const TextStyle(color: Colors.white, fontSize: 13),
-              ),
-              const SizedBox(height: 14),
-              const Text(
-                'New IPv4 address',
-                style: TextStyle(color: Colors.white54, fontSize: 12),
-              ),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  Expanded(child: _octetField(c1, f1, f2, setDialogState)),
-                  const Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 6),
-                    child: Text('.', style: TextStyle(color: Colors.white70)),
-                  ),
-                  Expanded(child: _octetField(c2, f2, f3, setDialogState)),
-                  const Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 6),
-                    child: Text('.', style: TextStyle(color: Colors.white70)),
-                  ),
-                  Expanded(child: _octetField(c3, f3, f4, setDialogState)),
-                  const Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 6),
-                    child: Text('.', style: TextStyle(color: Colors.white70)),
-                  ),
-                  Expanded(child: _octetField(c4, f4, null, setDialogState)),
-                ],
-              ),
-              const SizedBox(height: 14),
-              const Text('Inverter Credentials',
-                  style: TextStyle(color: Colors.white54, fontSize: 12)),
-              const SizedBox(height: 8),
-              TextField(
-                controller: userCtrl,
-                style: const TextStyle(color: Colors.white),
-                decoration: const InputDecoration(
-                  labelText: 'Username',
-                  labelStyle: TextStyle(color: Colors.white54),
-                  enabledBorder: OutlineInputBorder(
-                      borderSide: BorderSide(color: Colors.white24)),
-                  focusedBorder: OutlineInputBorder(
-                      borderSide: BorderSide(color: AppColors.primary)),
-                ),
-              ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: passCtrl,
-                obscureText: true,
-                style: const TextStyle(color: Colors.white),
-                decoration: const InputDecoration(
-                  labelText: 'Password',
-                  labelStyle: TextStyle(color: Colors.white54),
-                  enabledBorder: OutlineInputBorder(
-                      borderSide: BorderSide(color: Colors.white24)),
-                  focusedBorder: OutlineInputBorder(
-                      borderSide: BorderSide(color: AppColors.primary)),
-                ),
-              ),
-              const SizedBox(height: 14),
-              const SizedBox(height: 10),
-              Row(
-                children: [
-                  OutlinedButton.icon(
-                    onPressed: isProbing || isSaving
-                        ? null
-                        : () => runProbe(setDialogState),
-                    icon: isProbing
-                        ? const SizedBox(
-                            width: 14,
-                            height: 14,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.network_check),
-                    label: Text(isProbing ? 'Testing...' : 'Test connection'),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      composeIp(),
-                      style: const TextStyle(color: Colors.white70),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ],
-              ),
-              if (errorText != null) ...[
-                const SizedBox(height: 8),
-                Text(errorText!,
-                    style: const TextStyle(color: Colors.redAccent)),
-              ],
-              if (probeMessage != null) ...[
-                const SizedBox(height: 8),
-                Text(
-                  probeMessage!,
-                  style: TextStyle(
-                    color: probeOk ? const Color(0xFF66E4A8) : Colors.orange,
-                    fontSize: 12,
-                  ),
-                ),
-              ],
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: isSaving ? null : () => Navigator.pop(ctx),
-              child: const Text(
-                'Cancel',
-                style: TextStyle(color: Colors.white54),
-              ),
-            ),
-            TextButton(
-              onPressed: () async {
-                final navigator = Navigator.of(ctx);
-                final ip = composeIp();
-                if (!_isValidIp(ip)) {
-                  setDialogState(() => errorText = 'Invalid IP address');
-                  return;
-                }
-
-                setDialogState(() {
-                  isSaving = true;
-                  errorText = null;
-                });
-
-                if (!probeOk) {
-                  final probeResult = await widget.controller
-                      .probeInverterConfig(
-                          ip: ip,
-                          username: userCtrl.text.trim(),
-                          password: passCtrl.text.trim());
-                  if (!mounted) return;
-
-                  if (!probeResult.success) {
-                    setDialogState(() {
-                      isSaving = false;
-                      probeMessage = probeResult.message;
-                      probeOk = false;
-                    });
-                    return;
-                  }
-                }
-
-                try {
-                  await widget.controller.updateInverterConfig(
-                      ip: ip,
-                      username: userCtrl.text.trim(),
-                      password: passCtrl.text.trim());
-                  await widget.onSettingsSaved
-                      ?.call(ip, userCtrl.text.trim(), passCtrl.text.trim());
-                  if (!mounted) return;
-                  navigator.pop();
-                } catch (e) {
-                  if (!mounted) return;
-                  setDialogState(() {
-                    errorText = 'Save failed: $e';
-                    isSaving = false;
-                  });
-                  return;
-                }
-              },
-              child: Text(
-                isSaving ? 'Saving...' : 'Apply',
-                style: TextStyle(color: AppColors.primary),
-              ),
-            ),
-          ],
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (ctx) => SettingsScreen(
+          controller: widget.controller,
+          onSettingsSaved: widget.onSettingsSaved,
         ),
       ),
     );
-
-    userCtrl.dispose();
-    passCtrl.dispose();
-    c1.dispose();
-    c2.dispose();
-    c3.dispose();
-    c4.dispose();
-    f1.dispose();
-    f2.dispose();
-    f3.dispose();
-    f4.dispose();
   }
 
   Future<void> _showLogsDialog(BuildContext context) async {
@@ -417,59 +171,6 @@ class _EnergyMonitorScreenState extends State<EnergyMonitorScreen>
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Logs cleared')),
     );
-  }
-
-  static List<String> _splitIpIntoOctets(String ip) {
-    final parts = ip.split('.');
-    if (parts.length != 4) {
-      return const ['192', '168', '1', '16'];
-    }
-    return parts;
-  }
-
-  Widget _octetField(
-    TextEditingController controller,
-    FocusNode focus,
-    FocusNode? next,
-    StateSetter setDialogState,
-  ) {
-    return TextField(
-      controller: controller,
-      focusNode: focus,
-      maxLength: 3,
-      keyboardType: TextInputType.number,
-      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-      textAlign: TextAlign.center,
-      style: const TextStyle(color: Colors.white),
-      decoration: const InputDecoration(
-        counterText: '',
-        isDense: true,
-        contentPadding: EdgeInsets.symmetric(vertical: 8),
-        enabledBorder: UnderlineInputBorder(
-          borderSide: BorderSide(color: Colors.white24),
-        ),
-        focusedBorder: UnderlineInputBorder(
-          borderSide: BorderSide(color: Colors.white70),
-        ),
-      ),
-      onChanged: (value) {
-        if (value.length >= 3 && next != null) {
-          next.requestFocus();
-        }
-
-        // Trigger refresh of preview text/probe status area.
-        setDialogState(() {});
-      },
-    );
-  }
-
-  static bool _isValidIp(String ip) {
-    final parts = ip.split('.');
-    if (parts.length != 4) return false;
-    return parts.every((p) {
-      final n = int.tryParse(p);
-      return n != null && n >= 0 && n <= 255;
-    });
   }
 
   // ── Build ─────────────────────────────────────────────────────────
