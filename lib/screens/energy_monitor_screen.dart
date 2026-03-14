@@ -335,8 +335,8 @@ class _EnergyMonitorScreenState extends State<EnergyMonitorScreen>
             children: [
               if (path != null) ...[
                 Text('Log file: $path',
-                    style: const TextStyle(
-                        color: Colors.white54, fontSize: 12)),
+                    style:
+                        const TextStyle(color: Colors.white54, fontSize: 12)),
                 const SizedBox(height: 8),
               ],
               Expanded(
@@ -353,8 +353,7 @@ class _EnergyMonitorScreenState extends State<EnergyMonitorScreen>
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child:
-                const Text('Close', style: TextStyle(color: Colors.white54)),
+            child: const Text('Close', style: TextStyle(color: Colors.white54)),
           ),
         ],
       ),
@@ -576,37 +575,6 @@ class _EnergyMonitorScreenState extends State<EnergyMonitorScreen>
       SnackBar(
         content: Text('Visit GitHub releases for version ${release.tagName}'),
         action: SnackBarAction(label: 'OK', onPressed: () {}),
-      ),
-    );
-  }
-
-  Widget _buildIpWarning(BuildContext context, MonitorState state) {
-    final reason = state.inverterStatus == ConnectionStatus.error
-        ? (state.errorDetail ?? 'Connection error')
-        : 'Inverter returned no data';
-    return Container(
-      width: double.infinity,
-      color: Colors.orange.withAlpha(30),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-      child: Row(
-        children: [
-          const Icon(Icons.warning_amber_rounded,
-              color: Colors.orange, size: 18),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              '$reason — check the inverter IP address.',
-              style: const TextStyle(color: Colors.orange, fontSize: 13),
-            ),
-          ),
-          TextButton(
-            onPressed: () => _showIpDialog(context),
-            child: const Text(
-              'Change IP',
-              style: TextStyle(color: Colors.orange, fontSize: 13),
-            ),
-          ),
-        ],
       ),
     );
   }
