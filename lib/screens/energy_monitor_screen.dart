@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-
+import 'package:url_launcher/url_launcher.dart';
 
 import '../controllers/energy_controller.dart';
 import '../models/energy_data.dart';
@@ -328,18 +328,65 @@ class _EnergyMonitorScreenState extends State<EnergyMonitorScreen>
   }
 
   Future<void> _downloadLatestApk(BuildContext context) async {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Downloading update...')),
+    var progress = 0.0;
+    bool finished = false;
+    void Function(void Function())? dialogSetState;
+
+    void updateProgress(int received, int total) {
+      if (total <= 0) return;
+      final newProgress = received / total;
+      if (newProgress == progress) return;
+      progress = newProgress;
+      if (!finished) {
+        dialogSetState?.call(() {});
+      }
+    }
+
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            dialogSetState = setState;
+            return AlertDialog(
+              title: const Text('Downloading update'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text('Downloading the latest APK...'),
+                  const SizedBox(height: 16),
+                  LinearProgressIndicator(value: progress),
+                  const SizedBox(height: 8),
+                  Text('${(progress * 100).toStringAsFixed(0)}%'),
+                ],
+              ),
+            );
+          },
+        );
+      },
     );
 
-    final path = await widget.controller.downloadLatestApk();
-    if (!context.mounted) return;
+    final path = await widget.controller.downloadLatestApk(
+      onProgress: updateProgress,
+    );
 
-    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    finished = true;
+    if (!context.mounted) return;
+    Navigator.of(context).pop();
+
     if (path != null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Downloaded APK to: $path')),
+        const SnackBar(content: Text('Download complete, opening installer...')),
       );
+
+      final uri = Uri.file(path);
+      if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+        if (!context.mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Downloaded APK at: $path')),
+        );
+      }
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Update download failed.')),

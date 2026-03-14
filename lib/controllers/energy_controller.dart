@@ -262,7 +262,9 @@ class EnergyController extends ChangeNotifier {
   ///
   /// Returns the local file path where the APK was saved, or null if download
   /// failed or no APK was available.
-  Future<String?> downloadLatestApk() async {
+  Future<String?> downloadLatestApk({
+    void Function(int received, int total)? onProgress,
+  }) async {
     if (_disposed) return null;
 
     if (_availableRelease == null) {
@@ -276,7 +278,11 @@ class EnergyController extends ChangeNotifier {
     final apkUrl = release.getApkForArch(arch) ?? release.apkUrl;
     if (apkUrl == null) return null;
 
-    final file = await _versionCheck.downloadApk(apkUrl, arch);
+    final file = await _versionCheck.downloadApkWithProgress(
+      apkUrl,
+      arch,
+      onProgress: onProgress,
+    );
     return file?.path;
   }
 

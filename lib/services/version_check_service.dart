@@ -89,16 +89,39 @@ class VersionCheckService {
 
   /// Download APK for the given architecture.
   Future<File?> downloadApk(String apkUrl, String arch) async {
+    return downloadApkWithProgress(apkUrl, arch);
+  }
+
+  /// Download APK for the given architecture, reporting progress.
+  Future<File?> downloadApkWithProgress(
+    String apkUrl,
+    String arch, {
+    void Function(int received, int total)? onProgress,
+  }) async {
     try {
       final dir = await getDatabasesPath();
       final fileName = 'solar_power_manager_$arch.apk';
       final filePath = p.join(dir, fileName);
       final file = File(filePath);
+      final uri = Uri.parse(apkUrl);
 
-      final response = await http.get(Uri.parse(apkUrl));
+      final request = http.Request('GET', uri);
+      final response = await http.Client().send(request);
       if (response.statusCode != 200) return null;
 
-      await file.writeAsBytes(response.bodyBytes, flush: true);
+      final contentLength = response.contentLength ?? 0;
+      final sink = file.openWrite();
+      var received = 0;
+
+      await response.stream.listen((chunk) {
+        received += chunk.length;
+        sink.add(chunk);
+        if (onProgress != null && contentLength > 0) {
+          onProgress(received, contentLength);
+        }
+      }).asFuture();
+
+      await sink.close();
       return file;
     } catch (_) {
       return null;
