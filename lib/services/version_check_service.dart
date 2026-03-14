@@ -42,8 +42,12 @@ class GitHubRelease {
 class VersionCheckService {
   static const _owner = 'Fabbro96';
   static const _repo = 'solar_power_manager';
-  static const _releaseURL =
+  static const _latestReleaseURL =
       'https://api.github.com/repos/$_owner/$_repo/releases/latest';
+  static const _stableReleaseURL =
+      'https://api.github.com/repos/$_owner/$_repo/releases/tags/stable';
+  static const _betaReleaseURL =
+      'https://api.github.com/repos/$_owner/$_repo/releases/tags/beta';
   static const _tagsURL =
       'https://api.github.com/repos/$_owner/$_repo/tags?per_page=100';
 
@@ -55,16 +59,33 @@ class VersionCheckService {
   /// Fetch the latest release from GitHub.
   Future<GitHubRelease?> getLatestRelease() async {
     try {
-      final response = await http.get(Uri.parse(_releaseURL));
-      if (response.statusCode == 200) {
-        final release = _parseGitHubRelease(response.body);
-        if (release != null) {
-          // If the release has a semver tag (e.g. v2.0.0), use it directly.
-          final semver = _extractSemver(release.tagName);
-          if (semver != null) {
-            return release;
-          }
+      final candidates = await Future.wait([
+        _fetchReleaseByUrl(_betaReleaseURL),
+        _fetchReleaseByUrl(_stableReleaseURL),
+        _fetchReleaseByUrl(_latestReleaseURL),
+      ]);
+
+      GitHubRelease? best;
+      String? bestSemver;
+      for (final release in candidates) {
+        if (release == null) continue;
+        final semver = _extractSemver(release.tagName);
+        if (semver == null) continue;
+
+        if (best == null || bestSemver == null) {
+          best = release;
+          bestSemver = semver;
+          continue;
         }
+
+        if (_compareVersions(semver, bestSemver) > 0) {
+          best = release;
+          bestSemver = semver;
+        }
+      }
+
+      if (best != null) {
+        return best;
       }
 
       // Fallback: If the "latest release" API doesn't return a semver-friendly tag,
@@ -148,6 +169,12 @@ class VersionCheckService {
   }
 
   // ── Helpers ────────────────────────────────────────────────────────
+
+  Future<GitHubRelease?> _fetchReleaseByUrl(String url) async {
+    final response = await http.get(Uri.parse(url));
+    if (response.statusCode != 200) return null;
+    return _parseGitHubRelease(response.body);
+  }
 
   GitHubRelease? _parseGitHubRelease(String jsonStr) {
     try {
