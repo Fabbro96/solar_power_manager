@@ -27,7 +27,7 @@ class EnergyMonitorScreen extends StatefulWidget {
   State<EnergyMonitorScreen> createState() => _EnergyMonitorScreenState();
 }
 
-enum _EnergyMonitorMenuAction { changeIp, showLogs, clearLogs }
+enum _EnergyMonitorMenuAction { changeIp, showLogs, clearLogs, checkUpdates }
 
 class _EnergyMonitorScreenState extends State<EnergyMonitorScreen>
     with WidgetsBindingObserver {
@@ -202,6 +202,10 @@ class _EnergyMonitorScreenState extends State<EnergyMonitorScreen>
                     child: Text('Change inverter IP'),
                   ),
                   const PopupMenuItem(
+                    value: _EnergyMonitorMenuAction.checkUpdates,
+                    child: Text('Check for updates'),
+                  ),
+                  const PopupMenuItem(
                     value: _EnergyMonitorMenuAction.showLogs,
                     child: Text('Show logs'),
                   ),
@@ -214,6 +218,9 @@ class _EnergyMonitorScreenState extends State<EnergyMonitorScreen>
                   switch (action) {
                     case _EnergyMonitorMenuAction.changeIp:
                       _showSettingsDialog(context);
+                      break;
+                    case _EnergyMonitorMenuAction.checkUpdates:
+                      _checkUpdatesManually(context);
                       break;
                     case _EnergyMonitorMenuAction.showLogs:
                       _showLogsDialog(context);
@@ -328,6 +335,26 @@ class _EnergyMonitorScreenState extends State<EnergyMonitorScreen>
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Could not open the release link')),
+      );
+    }
+  }
+
+  Future<void> _checkUpdatesManually(BuildContext context) async {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Checking for updates...')),
+    );
+    final hasUpdate = await widget.controller.checkForUpdate();
+    if (!context.mounted) return;
+
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    if (hasUpdate) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text('Update available! Check the notification above.')),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('You are already on the latest version.')),
       );
     }
   }

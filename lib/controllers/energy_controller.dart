@@ -228,26 +228,26 @@ class EnergyController extends ChangeNotifier {
     if (_disposed) return;
 
     // Check immediately on first call
-    await _checkForUpdate();
+    await checkForUpdate();
 
     // Then check every 24 hours
     _versionCheckTimer = Timer.periodic(const Duration(hours: 24), (_) async {
-      await _checkForUpdate();
+      await checkForUpdate();
     });
   }
 
-  Future<void> _checkForUpdate() async {
-    if (_disposed) return;
-
+  Future<bool> checkForUpdate() async {
+    if (_disposed) return false;
     try {
       final release = await _versionCheck.getLatestRelease();
-      if (release == null || _disposed) return;
+      if (release == null || _disposed) return false;
 
       if (_versionCheck.isUpdateAvailable(release.tagName)) {
         _logs.info('EnergyController',
             'New version ${release.tagName} available (current: 2.0.0)');
         _availableRelease = release;
         notifyListeners();
+        return true;
       } else {
         _availableRelease = null;
         notifyListeners();
@@ -255,6 +255,7 @@ class EnergyController extends ChangeNotifier {
     } catch (e) {
       _logs.debug('EnergyController', 'Version check failed: $e');
     }
+    return false;
   }
 
   void dismissUpdateNotification() {
