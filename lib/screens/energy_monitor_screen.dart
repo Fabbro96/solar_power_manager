@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../controllers/energy_controller.dart';
 import '../models/energy_data.dart';
@@ -619,14 +620,15 @@ class _EnergyMonitorScreenState extends State<EnergyMonitorScreen>
     );
   }
 
-  void _openReleaseLink(dynamic release) {
-    // For now, show a snackbar. In production, use url_launcher to open GitHub releases
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Visit GitHub releases for version ${release.tagName}'),
-        action: SnackBarAction(label: 'OK', onPressed: () {}),
-      ),
-    );
+  Future<void> _openReleaseLink(dynamic release) async {
+    final url = Uri.parse(
+        'https://github.com/Fabbro96/solar_power_manager/releases/latest');
+    if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not open the release link')),
+      );
+    }
   }
 
   Widget _buildBody(MonitorState state) {
