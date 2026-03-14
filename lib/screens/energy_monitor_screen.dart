@@ -377,7 +377,8 @@ class _EnergyMonitorScreenState extends State<EnergyMonitorScreen>
 
     if (path != null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Download complete, opening installer...')),
+        const SnackBar(
+            content: Text('Download complete, opening installer...')),
       );
 
       final uri = Uri.file(path);
