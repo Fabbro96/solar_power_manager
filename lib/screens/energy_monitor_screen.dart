@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-
-import '../controllers/energy_controller.dart';
 import 'package:open_filex/open_filex.dart';
 
+import '../controllers/energy_controller.dart';
 import '../models/energy_data.dart';
+import '../services/apk_install_service.dart';
 import '../theme/app_theme.dart';
 import 'settings_screen.dart';
 import '../widgets/energy_info_card.dart';
@@ -249,7 +249,7 @@ class _EnergyMonitorScreenState extends State<EnergyMonitorScreen>
                 UpdateNotificationBar(
                   tagName: widget.controller.availableRelease!.tagName,
                   onDismiss: widget.controller.dismissUpdateNotification,
-                  onDownload: () => _downloadLatestApk(context),
+                  onInstall: () => _downloadLatestApk(context),
                 ),
               Expanded(child: _buildBody(state)),
             ],
@@ -308,23 +308,174 @@ class _EnergyMonitorScreenState extends State<EnergyMonitorScreen>
     Navigator.of(context).pop();
 
     if (path != null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text('Download complete, opening installer...')),
-      );
-
-      final result = await OpenFilex.open(path);
-      if (result.type != ResultType.done) {
-        if (!context.mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not open APK: ${result.message}')),
-        );
-      }
+      await _installDownloadedApk(context, path);
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Update download failed.')),
       );
     }
+  }
+
+  Future<void> _installDownloadedApk(BuildContext context, String path) async {
+    final shouldInstall = await _showInstallUpdateDialog(context);
+    if (!shouldInstall || !context.mounted) return;
+
+    final installerOpened = await _openInstallerWithPermissionHandling(
+      context,
+      path,
+    );
+
+    if (!installerOpened || !context.mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        duration: Duration(seconds: 8),
+        content: Text(
+          'Installer opened. If Android says "App non installata", remove the old app once and install this version again.',
+        ),
+      ),
+    );
+  }
+
+  Future<bool> _showInstallUpdateDialog(BuildContext context) async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Install update'),
+          content: const Text(
+            'The APK is ready. Android will now open the installer.\n\n'
+            'If Android asks for permission to install from this source, allow it and the installer will reopen automatically.\n\n'
+            'If Android later shows "App non installata", the version already on the phone was signed with a different key: uninstall it once, then install this APK.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('Install update'),
+            ),
+          ],
+        );
+      },
+    );
+
+    return result ?? false;
+  }
+
+  Future<bool> _openInstallerWithPermissionHandling(
+    BuildContext context,
+    String path, {
+    bool allowPermissionRetry = true,
+  }) async {
+    final canInstall = await ApkInstallService.canRequestPackageInstalls();
+    if (!canInstall) {
+      if (!allowPermissionRetry || !context.mounted) return false;
+
+      final granted = await _requestInstallPermission(context);
+      if (!granted || !context.mounted) return false;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text('Permission enabled, reopening installer...')),
+      );
+      return _openInstallerWithPermissionHandling(
+        context,
+        path,
+        allowPermissionRetry: false,
+      );
+    }
+
+    final result = await OpenFilex.open(path);
+    if (result.type == ResultType.done) {
+      return true;
+    }
+
+    final message = result.message.toLowerCase();
+    if (allowPermissionRetry && _looksLikePermissionIssue(message)) {
+      final granted = await _requestInstallPermission(context);
+      if (!granted || !context.mounted) return false;
+
+      return _openInstallerWithPermissionHandling(
+        context,
+        path,
+        allowPermissionRetry: false,
+      );
+    }
+
+    if (!context.mounted) return false;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        duration: const Duration(seconds: 8),
+        content: Text(
+          _installerErrorMessage(result.message),
+        ),
+      ),
+    );
+    return false;
+  }
+
+  Future<bool> _requestInstallPermission(BuildContext context) async {
+    final wantsSettings = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Allow app installs'),
+          content: const Text(
+            'Android is blocking the installer because installs from this app are not allowed yet. Open settings, enable the permission for this app, then come back here.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('Open settings'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (wantsSettings != true) return false;
+
+    final granted = await ApkInstallService.requestPackageInstallPermission();
+    if (!context.mounted) return granted;
+
+    if (!granted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          duration: Duration(seconds: 7),
+          content: Text(
+            'Install permission is still disabled. Enable it in Android settings to continue.',
+          ),
+        ),
+      );
+    }
+
+    return granted;
+  }
+
+  bool _looksLikePermissionIssue(String message) {
+    return message.contains('permission') ||
+        message.contains('denied') ||
+        message.contains('unknown source') ||
+        message.contains('security');
+  }
+
+  String _installerErrorMessage(String? rawMessage) {
+    final message = (rawMessage ?? '').trim();
+    final normalized = message.toLowerCase();
+
+    if (_looksLikePermissionIssue(normalized)) {
+      return 'Android blocked the installer permission. Enable installs from this source in settings, then try again.';
+    }
+
+    return 'Could not open the installer. If Android later reports "App non installata", uninstall the old app once and retry. ${message.isEmpty ? '' : 'Details: $message'}'
+        .trim();
   }
 
   Future<void> _checkUpdatesManually(BuildContext context) async {

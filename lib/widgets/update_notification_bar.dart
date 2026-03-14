@@ -3,13 +3,13 @@ import 'package:flutter/material.dart';
 class UpdateNotificationBar extends StatelessWidget {
   final String tagName;
   final VoidCallback onDismiss;
-  final VoidCallback onDownload;
+  final VoidCallback onInstall;
 
   const UpdateNotificationBar({
     super.key,
     required this.tagName,
     required this.onDismiss,
-    required this.onDownload,
+    required this.onInstall,
   });
 
   @override
@@ -44,9 +44,9 @@ class UpdateNotificationBar extends StatelessWidget {
                 ),
               ),
               TextButton(
-                onPressed: onDownload,
+                onPressed: onInstall,
                 child: const Text(
-                  'Download',
+                  'Install update',
                   style: TextStyle(color: Colors.blue, fontSize: 13),
                 ),
               ),
