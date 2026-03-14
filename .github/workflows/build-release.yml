@@ -42,6 +42,37 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
+      - name: Prepare Android release signing
+        shell: bash
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+
+          missing=0
+          for required_var in ANDROID_KEYSTORE_BASE64 ANDROID_KEYSTORE_PASSWORD ANDROID_KEY_ALIAS ANDROID_KEY_PASSWORD; do
+            if [[ -z "${!required_var:-}" ]]; then
+              echo "::error::Missing required secret: ${required_var}"
+              missing=1
+            fi
+          done
+          if [[ "$missing" -ne 0 ]]; then
+            exit 1
+          fi
+
+          mkdir -p android/keystore
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > android/keystore/release.keystore
+
+          cat > android/key.properties <<EOF
+          storeFile=../keystore/release.keystore
+          storePassword=${ANDROID_KEYSTORE_PASSWORD}
+          keyAlias=${ANDROID_KEY_ALIAS}
+          keyPassword=${ANDROID_KEY_PASSWORD}
+          EOF
+
       - name: Run tests
         run: flutter test
 
@@ -58,14 +89,21 @@ jobs:
           if [[ "$TAG_NAME" =~ ^v([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
             APP_VERSION_CORE="${BASH_REMATCH[1]}"
             IFS='.' read -r _major _minor _patch <<< "$APP_VERSION_CORE"
-            APP_BUILD_NUMBER="${_patch:-0}"
+            APP_BUILD_NUMBER="$((10#${_major:-0} * 10000 + 10#${_minor:-0} * 100 + 10#${_patch:-0}))"
           else
             APP_VERSION="$(grep '^version:' pubspec.yaml | awk '{print $2}')"
             APP_VERSION_CORE="${APP_VERSION%%+*}"
             APP_BUILD_NUMBER="${APP_VERSION#*+}"
             if [[ "$APP_BUILD_NUMBER" == "$APP_VERSION" ]]; then
-              APP_BUILD_NUMBER="0"
+              IFS='.' read -r _major _minor _patch <<< "$APP_VERSION_CORE"
+              APP_BUILD_NUMBER="$((10#${_major:-0} * 10000 + 10#${_minor:-0} * 100 + 10#${_patch:-0}))"
             fi
+          fi
+
+          # Android requires a positive integer versionCode.
+          if [[ "$APP_BUILD_NUMBER" -le 0 ]]; then
+            IFS='.' read -r _major _minor _patch <<< "$APP_VERSION_CORE"
+            APP_BUILD_NUMBER="$((10#${_major:-0} * 10000 + 10#${_minor:-0} * 100 + 10#${_patch:-0}))"
           fi
 
           APP_VERSION="${APP_VERSION_CORE}+${APP_BUILD_NUMBER}"

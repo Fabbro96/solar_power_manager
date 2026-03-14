@@ -1,5 +1,26 @@
 import com.android.build.OutputFile
 
+def keystoreProperties = new Properties()
+def keystorePropertiesFile = rootProject.file("key.properties")
+if (keystorePropertiesFile.exists()) {
+    keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
+}
+
+def resolveSigningValue = { String propertyKey, String envKey ->
+    def value = keystoreProperties.getProperty(propertyKey)
+    if (value == null || value.trim().isEmpty()) {
+        value = System.getenv(envKey)
+    }
+    return value
+}
+
+def releaseStoreFilePath = resolveSigningValue("storeFile", "ANDROID_KEYSTORE_PATH")
+def releaseStorePassword = resolveSigningValue("storePassword", "ANDROID_KEYSTORE_PASSWORD")
+def releaseKeyAlias = resolveSigningValue("keyAlias", "ANDROID_KEY_ALIAS")
+def releaseKeyPassword = resolveSigningValue("keyPassword", "ANDROID_KEY_PASSWORD")
+def hasReleaseSigning = [releaseStoreFilePath, releaseStorePassword, releaseKeyAlias, releaseKeyPassword]
+        .every { it != null && !it.trim().isEmpty() }
+
 plugins {
     id "com.android.application"
     id "kotlin-android"
@@ -31,11 +52,21 @@ android {
         versionName = flutter.versionName
     }
 
+    signingConfigs {
+        if (hasReleaseSigning) {
+            release {
+                storeFile = file(releaseStoreFilePath)
+                storePassword = releaseStorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.debug
+            // Use a stable release key when available; fallback to debug for local/dev builds only.
+            signingConfig = hasReleaseSigning ? signingConfigs.release : signingConfigs.debug
             minifyEnabled true
             shrinkResources true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
@@ -54,6 +85,12 @@ android {
     packagingOptions {
         pickFirst 'META-INF/com/android/build/gradle/app-metadata.properties'
     }
+}
+
+if ((System.getenv("CI") ?: "false").toBoolean() && !hasReleaseSigning) {
+    throw new GradleException(
+            "Release signing is not configured. Provide android/key.properties or ANDROID_KEYSTORE_PATH, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS, ANDROID_KEY_PASSWORD."
+    )
 }
 
 flutter {

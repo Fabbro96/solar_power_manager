@@ -82,6 +82,21 @@ To download: open `Releases` → pick `stable` or `beta` → download the APK ma
 
 Workflow file: `.github/workflows/build-release.yml`
 
+### Android release signing (required for updatable APKs)
+
+Android allows installing a new APK over an existing one only if both are signed
+with the same key and the new APK has a higher `versionCode`.
+
+The release workflow expects these repository secrets:
+
+- `ANDROID_KEYSTORE_BASE64`: base64 of your release keystore file.
+- `ANDROID_KEYSTORE_PASSWORD`: keystore password.
+- `ANDROID_KEY_ALIAS`: key alias inside the keystore.
+- `ANDROID_KEY_PASSWORD`: password for that key alias.
+
+Without these secrets, CI release build fails intentionally to prevent publishing
+non-updatable APKs.
+
 ## Security and Workflow Hardening
 
 - Actions are pinned to immutable commit SHAs.
