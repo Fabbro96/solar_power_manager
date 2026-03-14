@@ -36,8 +36,13 @@ void main() async {
   final appLogs = AppLogService();
   await appLogs.init();
 
-  final packageInfo = await PackageInfo.fromPlatform();
-  final appVersion = packageInfo.version;
+  String appVersion = '2.0.0';
+  try {
+    final packageInfo = await PackageInfo.fromPlatform();
+    appVersion = packageInfo.version;
+  } catch (e) {
+    appLogs.error('Startup', 'Failed to read package info: $e');
+  }
 
   final energyService = EnergyService(
     config: EnergyServiceConfig(

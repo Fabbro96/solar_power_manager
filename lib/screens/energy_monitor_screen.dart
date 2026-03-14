@@ -1,15 +1,17 @@
 import 'package:flutter/material.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../controllers/energy_controller.dart';
 import 'package:open_filex/open_filex.dart';
 
 import '../models/energy_data.dart';
-import '../models/power_sample.dart';
 import '../theme/app_theme.dart';
 import 'settings_screen.dart';
 import '../widgets/energy_info_card.dart';
 import '../widgets/power_chart.dart';
+import '../widgets/ip_warning_bar.dart';
+import '../widgets/update_notification_bar.dart';
+import 'widgets/chart_range_selector.dart';
+import 'widgets/chart_stats_row.dart';
 
 class EnergyMonitorScreen extends StatefulWidget {
   final EnergyController controller;
@@ -236,96 +238,24 @@ class _EnergyMonitorScreenState extends State<EnergyMonitorScreen>
           ),
           body: Column(
             children: [
-              if (_shouldWarnAboutIp(state)) _buildIpWarning(context, state),
+              if (_shouldWarnAboutIp(state))
+                IpWarningBar(
+                  reason: state.inverterStatus == ConnectionStatus.error
+                      ? (state.errorDetail ?? 'Connection error')
+                      : 'Inverter returned no data',
+                  onChangeIp: () => _showSettingsDialog(context),
+                ),
               if (widget.controller.availableRelease != null)
-                _buildUpdateAvailableNotification(context),
+                UpdateNotificationBar(
+                  tagName: widget.controller.availableRelease!.tagName,
+                  onDismiss: widget.controller.dismissUpdateNotification,
+                  onDownload: () => _downloadLatestApk(context),
+                ),
               Expanded(child: _buildBody(state)),
             ],
           ),
         );
       },
-    );
-  }
-
-  Widget _buildIpWarning(BuildContext context, MonitorState state) {
-    final reason = state.inverterStatus == ConnectionStatus.error
-        ? (state.errorDetail ?? 'Connection error')
-        : 'Inverter returned no data';
-    return Container(
-      width: double.infinity,
-      color: Colors.orange.withAlpha(30),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-      child: Row(
-        children: [
-          const Icon(Icons.warning_amber_rounded,
-              color: Colors.orange, size: 18),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              '$reason — check the inverter IP address.',
-              style: const TextStyle(color: Colors.orange, fontSize: 13),
-            ),
-          ),
-          TextButton(
-            onPressed: () => _showSettingsDialog(context),
-            child: const Text(
-              'Change IP',
-              style: TextStyle(color: Colors.orange, fontSize: 13),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildUpdateAvailableNotification(BuildContext context) {
-    final release = widget.controller.availableRelease;
-    if (release == null) return const SizedBox.shrink();
-
-    return Container(
-      width: double.infinity,
-      color: Colors.blue.withAlpha(30),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-      child: Row(
-        children: [
-          const Icon(Icons.cloud_download, color: Colors.blue, size: 18),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  'Version ${release.tagName} available',
-                  style: const TextStyle(color: Colors.blue, fontSize: 13),
-                ),
-              ],
-            ),
-          ),
-          Row(
-            children: [
-              TextButton(
-                onPressed: () {
-                  widget.controller.dismissUpdateNotification();
-                },
-                child: const Text(
-                  'Dismiss',
-                  style: TextStyle(color: Colors.blue, fontSize: 13),
-                ),
-              ),
-              TextButton(
-                onPressed: () {
-                  _downloadLatestApk(context);
-                },
-                child: const Text(
-                  'Download',
-                  style: TextStyle(color: Colors.blue, fontSize: 13),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
     );
   }
 
@@ -446,9 +376,12 @@ class _EnergyMonitorScreenState extends State<EnergyMonitorScreen>
           flex: 3,
           child: Column(
             children: [
-              _rangeSelector(state),
+              ChartRangeSelector(
+                state: state,
+                onRangeSelected: widget.controller.setChartRange,
+              ),
               const SizedBox(height: 6),
-              _chartStats(state),
+              ChartStatsRow(state: state),
               const SizedBox(height: 6),
               Expanded(
                 child: _buildChartPanel(state),
@@ -487,9 +420,12 @@ class _EnergyMonitorScreenState extends State<EnergyMonitorScreen>
           ],
         ),
         const SizedBox(height: 10),
-        _rangeSelector(state),
+        ChartRangeSelector(
+          state: state,
+          onRangeSelected: widget.controller.setChartRange,
+        ),
         const SizedBox(height: 6),
-        _chartStats(state),
+        ChartStatsRow(state: state),
         const SizedBox(height: 6),
         Expanded(
           child: _buildChartPanel(state),
@@ -626,133 +562,6 @@ class _EnergyMonitorScreenState extends State<EnergyMonitorScreen>
         if (!compact)
           const Text('Auto-refresh active', style: AppTextStyles.muted),
       ],
-    );
-  }
-
-  Widget _rangeSelector(MonitorState state) {
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: Row(
-        children: ChartRange.values.map((range) {
-          final selected = range == state.chartRange;
-          return Padding(
-            padding: const EdgeInsets.only(right: 8),
-            child: ChoiceChip(
-              label: Text(range.label),
-              selected: selected,
-              onSelected: (_) => widget.controller.setChartRange(range),
-              labelStyle: TextStyle(
-                color: selected ? Colors.black : Colors.white70,
-                fontWeight: FontWeight.w600,
-                fontSize: 10,
-              ),
-              labelPadding: const EdgeInsets.symmetric(horizontal: 6),
-              selectedColor: AppColors.accent,
-              backgroundColor: const Color(0xFF111111),
-              side: const BorderSide(color: Colors.white12),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
-              visualDensity: const VisualDensity(horizontal: -3, vertical: -3),
-              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-            ),
-          );
-        }).toList(growable: false),
-      ),
-    );
-  }
-
-  Widget _chartStats(MonitorState state) {
-    String format(double? v) => v == null ? '--' : '${v.toStringAsFixed(0)} W';
-
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      children: [
-        _statChip('MIN', format(state.minPower)),
-        _statChip('AVG', format(state.avgPower)),
-        _statChip('MAX', format(state.maxPower)),
-        _statChip('SAMPLES', '${state.powerHistory.length}'),
-        _vsAvgChip(state),
-      ],
-    );
-  }
-
-  Widget _vsAvgChip(MonitorState state) {
-    final delta = state.deltaVsAverage;
-    final percent = state.percentVsAverage;
-
-    if (delta == null || percent == null) {
-      return _statChip('NOW vs AVG', '--');
-    }
-
-    final sign = delta >= 0 ? '+' : '';
-    final color =
-        delta >= 0 ? const Color(0xFF66E4A8) : const Color(0xFFFF8A8A);
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: const Color(0xFF0D0D0D),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: color.withAlpha(120)),
-      ),
-      child: RichText(
-        text: TextSpan(
-          children: [
-            const TextSpan(
-              text: 'NOW vs AVG ',
-              style: TextStyle(
-                color: Colors.white54,
-                fontSize: 11,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            TextSpan(
-              text:
-                  '$sign${delta.toStringAsFixed(0)} W ($sign${percent.toStringAsFixed(1)}%)',
-              style: TextStyle(
-                color: color,
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _statChip(String label, String value) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: const Color(0xFF0D0D0D),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: Colors.white12),
-      ),
-      child: RichText(
-        text: TextSpan(
-          children: [
-            TextSpan(
-              text: '$label ',
-              style: const TextStyle(
-                color: Colors.white54,
-                fontSize: 11,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            TextSpan(
-              text: value,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }
