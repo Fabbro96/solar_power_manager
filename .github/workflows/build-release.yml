@@ -147,11 +147,11 @@ jobs:
           if [[ "$minor" == "0" && "$patch" == "0" ]]; then
             RELEASE_TAG="stable"
             RELEASE_TITLE="Stable — Solar Power Manager ${TAG_NAME}"
-            PRERELEASE_FLAG=""
+            PRERELEASE_BOOL="false"
           else
             RELEASE_TAG="beta"
             RELEASE_TITLE="Beta — Solar Power Manager ${TAG_NAME}"
-            PRERELEASE_FLAG="--prerelease"
+            PRERELEASE_BOOL="true"
           fi
 
           NOTES="$(printf 'Version: %s\nTag: %s\nCommit: %s' "$APP_VERSION" "$TAG_NAME" "$GITHUB_SHA")"
@@ -186,32 +186,33 @@ jobs:
             assets+=("$versioned_apk")
           done
 
-          # Ensure the release exists (idempotent)
-          if ! gh release view "$RELEASE_TAG" --repo "$GH_REPO" >/dev/null 2>&1; then
-            gh release create "$RELEASE_TAG" \
-              --repo "$GH_REPO" \
-              --title "$RELEASE_TITLE" \
-              --notes "$NOTES" \
-              --target "$GITHUB_SHA" \
-              ${PRERELEASE_FLAG}
+          # Create or update the channel release explicitly by tag.
+          release_json="$(gh api "repos/${GH_REPO}/releases/tags/${RELEASE_TAG}" 2>/dev/null || true)"
+          release_id="$(jq -r '.id // empty' <<< "$release_json")"
+
+          if [[ -z "$release_id" ]]; then
+            release_json="$(gh api -X POST "repos/${GH_REPO}/releases" \
+              -f tag_name="$RELEASE_TAG" \
+              -f target_commitish="$GITHUB_SHA" \
+              -f name="$RELEASE_TITLE" \
+              -f body="$NOTES" \
+              -F prerelease="$PRERELEASE_BOOL")"
+            release_id="$(jq -r '.id // empty' <<< "$release_json")"
           else
-            gh release edit "$RELEASE_TAG" \
-              --repo "$GH_REPO" \
-              --title "$RELEASE_TITLE" \
-              --notes "$NOTES" \
-              ${PRERELEASE_FLAG}
+            release_json="$(gh api -X PATCH "repos/${GH_REPO}/releases/${release_id}" \
+              -f target_commitish="$GITHUB_SHA" \
+              -f name="$RELEASE_TITLE" \
+              -f body="$NOTES" \
+              -F prerelease="$PRERELEASE_BOOL")"
           fi
 
           # Read current assets first so we can clean stale files after a
           # successful upload.
           mapfile -t OLD_ASSETS < <(
-            gh release view "$RELEASE_TAG" --repo "$GH_REPO" --json assets -q '.assets[].name' 2>/dev/null || true
+            jq -r '.assets[]?.name' <<< "$release_json"
           )
 
-          # Resolve release id and upload_url once, then upload each file via
-          # the releases API. This avoids flaky behavior observed with
-          # `gh release upload` in CI for long-lived channel releases.
-          release_json="$(gh api "repos/${GH_REPO}/releases/tags/${RELEASE_TAG}")"
+          # Resolve upload URL from the release payload and use API uploads.
           release_id="$(jq -r '.id' <<< "$release_json")"
           upload_url_template="$(jq -r '.upload_url' <<< "$release_json")"
           upload_url_base="${upload_url_template%%\{*}"
