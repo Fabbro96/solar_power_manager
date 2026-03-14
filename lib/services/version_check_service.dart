@@ -148,8 +148,11 @@ class VersionCheckService {
   }
 
   static int _compareVersions(String v1, String v2) {
-    final p1 = v1.split('.').map(int.tryParse).toList();
-    final p2 = v2.split('.').map(int.tryParse).toList();
+    String cleanV1 = v1.replaceAll(RegExp(r'^[vV]'), '').split('+').first;
+    String cleanV2 = v2.replaceAll(RegExp(r'^[vV]'), '').split('+').first;
+
+    final p1 = cleanV1.split('.').map(int.tryParse).toList();
+    final p2 = cleanV2.split('.').map(int.tryParse).toList();
 
     for (int i = 0; i < 3; i++) {
       final n1 = i < p1.length && p1[i] != null ? p1[i]! : 0;
