@@ -21,17 +21,10 @@ class _NoopEnergyController extends EnergyController {
 
 void main() {
   testWidgets('App renders without crashing', (WidgetTester tester) async {
-    final tempDir = Directory.systemTemp.createTempSync('widget_test_');
-
-    final logService = AppLogService(flushDelay: Duration.zero);
-    await logService.init(basePath: tempDir.path);
-    logService.info('widget', 'boot');
-
     final service = EnergyService(
       config: const EnergyServiceConfig(url: '', username: '', password: ''),
     );
-    final controller =
-        _NoopEnergyController(service: service, logService: logService);
+    final controller = _NoopEnergyController(service: service);
 
     await tester.pumpWidget(SolarPowerApp(controller: controller));
   });
