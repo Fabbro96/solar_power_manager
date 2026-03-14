@@ -24,6 +24,8 @@ class EnergyMonitorScreen extends StatefulWidget {
   State<EnergyMonitorScreen> createState() => _EnergyMonitorScreenState();
 }
 
+enum _EnergyMonitorMenuAction { changeIp, showLogs, clearLogs }
+
 class _EnergyMonitorScreenState extends State<EnergyMonitorScreen>
     with WidgetsBindingObserver {
   @override
@@ -58,16 +60,6 @@ class _EnergyMonitorScreenState extends State<EnergyMonitorScreen>
   }
 
   // ── Helpers ───────────────────────────────────────────────────────
-
-  String _getAppBarTitle() => 'Solar Monitor';
-
-  Widget _buildAppBarTitle() {
-    return Text(
-      _getAppBarTitle(),
-      style: AppTextStyles.appBarTitle.copyWith(fontSize: 18),
-      overflow: TextOverflow.ellipsis,
-    );
-  }
 
   String _monitorStatusLabel(MonitorState state) {
     switch (state.inverterStatus) {
@@ -326,6 +318,57 @@ class _EnergyMonitorScreenState extends State<EnergyMonitorScreen>
     f4.dispose();
   }
 
+  Future<void> _showLogsDialog(BuildContext context) async {
+    final logs = await widget.controller.readAllLogs();
+    final path = widget.controller.logFilePath;
+
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF111111),
+        title: const Text('App logs', style: TextStyle(color: Colors.white70)),
+        content: SizedBox(
+          width: double.maxFinite,
+          height: 280,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (path != null) ...[
+                Text('Log file: $path',
+                    style: const TextStyle(
+                        color: Colors.white54, fontSize: 12)),
+                const SizedBox(height: 8),
+              ],
+              Expanded(
+                child: SingleChildScrollView(
+                  child: SelectableText(
+                    logs.isEmpty ? 'No log entries.' : logs,
+                    style: const TextStyle(color: Colors.white, fontSize: 12),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child:
+                const Text('Close', style: TextStyle(color: Colors.white54)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _clearLogs(BuildContext context) async {
+    await widget.controller.clearLogs();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Logs cleared')),
+    );
+  }
+
   static List<String> _splitIpIntoOctets(String ip) {
     final parts = ip.split('.');
     if (parts.length != 4) {
@@ -389,26 +432,151 @@ class _EnergyMonitorScreenState extends State<EnergyMonitorScreen>
         final state = widget.controller.state;
         return Scaffold(
           appBar: AppBar(
-            title: _buildAppBarTitle(),
+            title: const SizedBox.shrink(),
+            leading: IconButton(
+              tooltip: 'Change inverter IP',
+              icon: const Icon(
+                Icons.settings_ethernet,
+                color: Colors.white54,
+              ),
+              onPressed: () => _showIpDialog(context),
+            ),
             actions: [
-              IconButton(
-                tooltip: 'Change inverter IP',
-                icon: const Icon(
-                  Icons.settings_ethernet,
-                  color: Colors.white54,
-                ),
-                onPressed: () => _showIpDialog(context),
+              PopupMenuButton<_EnergyMonitorMenuAction>(
+                icon: const Icon(Icons.more_vert, color: Colors.white54),
+                color: const Color(0xFF111111),
+                itemBuilder: (ctx) => [
+                  const PopupMenuItem(
+                    value: _EnergyMonitorMenuAction.changeIp,
+                    child: Text('Change inverter IP'),
+                  ),
+                  const PopupMenuItem(
+                    value: _EnergyMonitorMenuAction.showLogs,
+                    child: Text('Show logs'),
+                  ),
+                  const PopupMenuItem(
+                    value: _EnergyMonitorMenuAction.clearLogs,
+                    child: Text('Clear logs'),
+                  ),
+                ],
+                onSelected: (action) {
+                  switch (action) {
+                    case _EnergyMonitorMenuAction.changeIp:
+                      _showIpDialog(context);
+                      break;
+                    case _EnergyMonitorMenuAction.showLogs:
+                      _showLogsDialog(context);
+                      break;
+                    case _EnergyMonitorMenuAction.clearLogs:
+                      _clearLogs(context);
+                      break;
+                  }
+                },
               ),
             ],
           ),
           body: Column(
             children: [
               if (_shouldWarnAboutIp(state)) _buildIpWarning(context, state),
+              if (widget.controller.availableRelease != null)
+                _buildUpdateAvailableNotification(context),
               Expanded(child: _buildBody(state)),
             ],
           ),
         );
       },
+    );
+  }
+
+  Widget _buildIpWarning(BuildContext context, MonitorState state) {
+    final reason = state.inverterStatus == ConnectionStatus.error
+        ? (state.errorDetail ?? 'Connection error')
+        : 'Inverter returned no data';
+    return Container(
+      width: double.infinity,
+      color: Colors.orange.withAlpha(30),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      child: Row(
+        children: [
+          const Icon(Icons.warning_amber_rounded,
+              color: Colors.orange, size: 18),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              '$reason — check the inverter IP address.',
+              style: const TextStyle(color: Colors.orange, fontSize: 13),
+            ),
+          ),
+          TextButton(
+            onPressed: () => _showIpDialog(context),
+            child: const Text(
+              'Change IP',
+              style: TextStyle(color: Colors.orange, fontSize: 13),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildUpdateAvailableNotification(BuildContext context) {
+    final release = widget.controller.availableRelease;
+    if (release == null) return const SizedBox.shrink();
+
+    return Container(
+      width: double.infinity,
+      color: Colors.blue.withAlpha(30),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      child: Row(
+        children: [
+          const Icon(Icons.cloud_download, color: Colors.blue, size: 18),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Version ${release.tagName} available',
+                  style: const TextStyle(color: Colors.blue, fontSize: 13),
+                ),
+              ],
+            ),
+          ),
+          Row(
+            children: [
+              TextButton(
+                onPressed: () {
+                  widget.controller.dismissUpdateNotification();
+                },
+                child: const Text(
+                  'Dismiss',
+                  style: TextStyle(color: Colors.blue, fontSize: 13),
+                ),
+              ),
+              TextButton(
+                onPressed: () {
+                  _openReleaseLink(release);
+                },
+                child: const Text(
+                  'Get it',
+                  style: TextStyle(color: Colors.blue, fontSize: 13),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _openReleaseLink(dynamic release) {
+    // For now, show a snackbar. In production, use url_launcher to open GitHub releases
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Visit GitHub releases for version ${release.tagName}'),
+        action: SnackBarAction(label: 'OK', onPressed: () {}),
+      ),
     );
   }
 

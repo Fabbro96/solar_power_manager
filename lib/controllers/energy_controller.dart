@@ -8,6 +8,7 @@ import '../models/power_sample.dart';
 import '../services/app_log_service.dart';
 import '../services/energy_service.dart';
 import '../services/power_history_service.dart';
+import '../services/version_check_service.dart';
 
 class InverterIpProbeResult {
   final bool success;
@@ -27,16 +28,23 @@ class InverterIpProbeResult {
 
 class EnergyController extends ChangeNotifier {
   static const int _pruneEverySamples = 24;
-  static const Duration _internetCheckInterval = Duration(minutes: 5);
+  static const Duration _internetCheckInterval = Duration(minutes: 10);
 
   final EnergyService _service;
   final PowerHistoryService? _historyService;
   final AppConfig _config;
   final AppLogService _logs;
+  late final VersionCheckService _versionCheck;
 
   MonitorState _state = const MonitorState();
 
   MonitorState get state => _state;
+
+  GitHubRelease? _availableRelease;
+  DateTime? _lastVersionCheckAt;
+  Timer? _versionCheckTimer;
+
+  GitHubRelease? get availableRelease => _availableRelease;
 
   List<PowerSample> _powerHistory = [];
 
@@ -61,10 +69,13 @@ class EnergyController extends ChangeNotifier {
     PowerHistoryService? historyService,
     AppConfig config = const AppConfig(),
     AppLogService? logService,
+    String appVersion = '2.0.0',
   })  : _service = service,
         _historyService = historyService,
         _config = config,
-        _logs = logService ?? AppLogService();
+        _logs = logService ?? AppLogService() {
+    _versionCheck = VersionCheckService(localVersion: appVersion);
+  }
 
   void start() {
     if (_started || _disposed) return;
@@ -87,8 +98,10 @@ class EnergyController extends ChangeNotifier {
   void dispose() {
     _disposed = true;
     stop();
+    _versionCheckTimer?.cancel();
     _logs.info('EnergyController', 'Controller disposed');
     _service.dispose();
+    _logs.dispose();
     unawaited(_historyService?.dispose());
     super.dispose();
   }
@@ -126,6 +139,13 @@ class EnergyController extends ChangeNotifier {
 
   AppLogEntry? get latestLog => _logs.latest;
   List<AppLogEntry> get recentLogs => _logs.entries;
+
+  /// Returns the current on-disk log file path, if available.
+  String? get logFilePath => _logs.logFilePath;
+
+  Future<String> readAllLogs() => _logs.readAll();
+
+  Future<void> clearLogs() => _logs.clear();
 
   Future<InverterIpProbeResult> probeInverterIp(String candidateIp) async {
     final normalized = EnergyService.normalizeIpv4(candidateIp);
@@ -185,6 +205,47 @@ class EnergyController extends ChangeNotifier {
     updateState(MonitorState(chartRange: previousRange));
     stop();
     start();
+  }
+
+  /// Check periodically for new app version on GitHub.
+  Future<void> scheduleVersionCheck() async {
+    if (_disposed) return;
+
+    // Check immediately on first call
+    await _checkForUpdate();
+
+    // Then check every 24 hours
+    _versionCheckTimer = Timer.periodic(const Duration(hours: 24), (_) async {
+      await _checkForUpdate();
+    });
+  }
+
+  Future<void> _checkForUpdate() async {
+    if (_disposed) return;
+
+    try {
+      final release = await _versionCheck.getLatestRelease();
+      if (release == null || _disposed) return;
+
+      if (_versionCheck.isUpdateAvailable(release.tagName)) {
+        _logs.info('EnergyController',
+            'New version ${release.tagName} available (current: 2.0.0)');
+        _availableRelease = release;
+        notifyListeners();
+      } else {
+        _availableRelease = null;
+        notifyListeners();
+      }
+      _lastVersionCheckAt = DateTime.now();
+    } catch (e) {
+      _logs.debug('EnergyController', 'Version check failed: $e');
+    }
+  }
+
+  void dismissUpdateNotification() {
+    if (_disposed) return;
+    _availableRelease = null;
+    notifyListeners();
   }
 
   void updateState(MonitorState newState) {

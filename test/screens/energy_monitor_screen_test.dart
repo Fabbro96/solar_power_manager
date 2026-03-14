@@ -27,8 +27,8 @@ void main() {
       ),
     );
 
-    // Initial state check
-    expect(find.textContaining('Solar Monitor'), findsWidgets);
+    // App bar should show the IP settings icon (no title text)
+    expect(find.byIcon(Icons.settings_ethernet), findsOneWidget);
 
     // Cards should say "Loading..." initially since Future isn't done yet (or it threw)
     final cards = find.byType(EnergyInfoCard);

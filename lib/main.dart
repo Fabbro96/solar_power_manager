@@ -31,6 +31,7 @@ void main() async {
   ]);
 
   final appLogs = AppLogService();
+  await appLogs.init();
 
   final energyService = EnergyService(
     config: EnergyServiceConfig(
@@ -56,6 +57,9 @@ void main() async {
   );
 
   runApp(SolarPowerApp(controller: controller, settings: settings));
+
+  // Schedule periodic version checks
+  unawaited(controller.scheduleVersionCheck());
 }
 
 /// Shown when startup services fail to initialise (e.g. corrupted asset file).

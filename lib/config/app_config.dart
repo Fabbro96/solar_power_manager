@@ -7,11 +7,14 @@ class AppConfig {
   final int maxChartPoints;
 
   const AppConfig({
-    this.fetchInterval = const Duration(seconds: 30),
-    this.minFetchInterval = const Duration(seconds: 30),
-    this.maxFetchInterval = const Duration(minutes: 4),
-    this.stableDeltaThresholdWatts = 20,
-    this.stableSamplesForBackoff = 4,
-    this.maxChartPoints = 50,
+    // Default polling cadence is slower to reduce CPU/network usage.
+    this.fetchInterval = const Duration(minutes: 2),
+    this.minFetchInterval = const Duration(minutes: 1),
+    this.maxFetchInterval = const Duration(minutes: 15),
+    // Increase threshold so small fluctuations don't force faster polling.
+    this.stableDeltaThresholdWatts = 40,
+    this.stableSamplesForBackoff = 6,
+    // Keep chart history reasonable for performance.
+    this.maxChartPoints = 40,
   });
 }
