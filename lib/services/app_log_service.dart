@@ -120,11 +120,16 @@ class AppLogService {
     required String source,
     required String message,
   }) {
+    // Redact accidental plain text passwords in URLs or log messages
+    final redactedMessage = message.replaceAllMapped(
+        RegExp(r'(password[:=])([^\s&]+)', caseSensitive: false),
+        (match) => '${match.group(1)}***');
+
     final entry = AppLogEntry(
       timestamp: DateTime.now(),
       level: level,
       source: source,
-      message: message,
+      message: redactedMessage,
     );
     _entries.add(entry);
     while (_entries.length > _maxEntries) {

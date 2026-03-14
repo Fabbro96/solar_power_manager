@@ -7,9 +7,13 @@ void main() {
 
     expect(service.isUpdateAvailable('2.0.1'), true);
     expect(service.isUpdateAvailable('2.1.0'), true);
+    expect(service.isUpdateAvailable('2.1'), true); // Check 0.1 format
     expect(service.isUpdateAvailable('3.0.0'), true);
+    expect(service.isUpdateAvailable('3.0'), true);
     expect(service.isUpdateAvailable('2.0.0'), false);
+    expect(service.isUpdateAvailable('2.0'), false);
     expect(service.isUpdateAvailable('1.9.9'), false);
+    expect(service.isUpdateAvailable('1.9'), false);
   });
 
   test('VersionCheckService gets correct APK URL for architecture', () {

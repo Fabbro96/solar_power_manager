@@ -183,8 +183,8 @@ class VersionCheckService {
   }
 
   String? _extractSemver(String tag) {
-    // Finds version patterns like "v1.2.3" or "1.2.3".
-    final match = RegExp(r'v?(\d+\.\d+\.\d+)').firstMatch(tag);
+    // Finds version patterns like "v2.1", "v1.2.3" or "1.2.3".
+    final match = RegExp(r'v?(\d+\.\d+(?:\.\d+)?)').firstMatch(tag);
     return match?.group(1);
   }
 
