@@ -2,6 +2,4 @@
 <full-backup-content>
     <!-- Back up app preferences (includes SharedPreferences used by settings). -->
     <include domain="sharedpref" path="." />
-    <!-- Exclude cache/temp files from backup. -->
-    <exclude domain="cache" path="." />
 </full-backup-content>
